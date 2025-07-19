@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">သတិ - Thati Alert</string>
+    
+    <!-- Main Activity -->
+    <string name="select_mode">Mode ရွေးချယ်ပါ</string>
+    <string name="admin_mode">Admin Mode</string>
+    <string name="user_mode">User Mode</string>
+    <string name="admin_description">သတိပေးချက်များ ပေးပို့ရန်</string>
+    <string name="user_description">သတိပေးချက်များ လက်ခံရန်</string>
+    
+    <!-- Permissions -->
+    <string name="permission_required">Permission လိုအပ်သည်</string>
+    <string name="permission_description">App ကို အသုံးပြုရန် permission များ လိုအပ်ပါသည်</string>
+    <string name="grant_permissions">Permission ပေးရန်</string>
+    
+    <!-- Admin Activity -->
+    <string name="admin_title">Admin Mode</string>
+    <string name="service_running">Service Running</string>
+    <string name="service_stopped">Service Stopped</string>
+    <string name="custom_alert">စိတ်ကြိုက် သတိပေးချက်</string>
+    <string name="alert_placeholder">သတိပေးချက် စာသား ရိုက်ထည့်ပါ...</string>
+    <string name="send_alert">Alert ပို့ရန်</string>
+    <string name="sending">ပို့နေသည်...</string>
+    <string name="quick_alerts">အမြန် သတိပေးချက်များ</string>
+    
+    <!-- User Activity -->
+    <string name="user_title">User Mode</string>
+    <string name="listening">Listening</string>
+    <string name="inactive">Inactive</string>
+    <string name="received_alerts">လက်ခံရရှိသော Alert</string>
+    <string name="today_alerts">ယနေ့ Alert</string>
+    <string name="refresh">Refresh</string>
+    <string name="clear_all">Clear All</string>
+    <string name="no_alerts">သတိပေးချက် မရှိသေးပါ</string>
+    <string name="no_alerts_description">Alert များ လက်ခံရရှိသည့်အခါ ဤနေရာတွင် ပြသမည်ဖြစ်သည်</string>
+    
+    <!-- Alert Types -->
+    <string name="air_raid">လေကြောင်းတိုက်ခိုက်မှု</string>
+    <string name="emergency">အရေးပေါ်အခြေအနေ</string>
+    <string name="evacuation">ရွှေ့ပြောင်းရန်</string>
+    <string name="all_clear">ဘေးကင်းပြီ</string>
+    <string name="test">စမ်းသပ်ချက်</string>
+    
+    <!-- Notifications -->
+    <string name="alert_notification_title">🚨 သတိပေးချက်!</string>
+    <string name="service_notification_title">Thati Alert Service</string>
+    <string name="admin_service_content">Admin Mode - Ready to send alerts</string>
+    <string name="user_service_content">User Mode - Listening for alerts</string>
+    
+    <!-- Common -->
+    <string name="back">ပြန်သွားရန်</string>
+    <string name="ok">OK</string>
+    <string name="cancel">Cancel</string>
+    <string name="error">Error</string>
+    <string name="success">Success</string>
+</resources>

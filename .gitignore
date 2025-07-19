@@ -1,0 +1,129 @@
+# Thati Air Alert - Git Ignore File
+
+# ===== GENERAL =====
+*.log
+*.tmp
+*.temp
+.DS_Store
+Thumbs.db
+.env
+.env.local
+.env.production
+.env.staging
+
+# ===== NODE.JS =====
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+.yarn-integrity
+.pnpm-debug.log*
+
+# ===== SERVER =====
+server/node_modules/
+server/.env
+server/.env.local
+server/.env.production
+server/logs/
+server/uploads/
+server/temp/
+server/coverage/
+server/test-report.json
+
+# ===== WEB DASHBOARD =====
+admin-dashboard/node_modules/
+admin-dashboard/build/
+admin-dashboard/dist/
+admin-dashboard/.env.local
+admin-dashboard/.env.production
+admin-dashboard/coverage/
+
+# ===== ANDROID APP =====
+app/build/
+app/.gradle/
+app/local.properties
+app/captures/
+app/.externalNativeBuild/
+app/.cxx/
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+
+# ===== GRADLE =====
+.gradle/
+build/
+gradle-app.setting
+!gradle-wrapper.jar
+!gradle-wrapper.properties
+
+# ===== ANDROID STUDIO =====
+.idea/
+*.iml
+*.ipr
+*.iws
+.navigation/
+captures/
+output.json
+
+# ===== DATABASE =====
+*.db
+*.sqlite
+*.sqlite3
+database.sql
+backup_*.sql
+
+# ===== SECURITY =====
+*.key
+*.pem
+*.p12
+*.keystore
+secrets/
+private/
+credentials/
+
+# ===== LOGS =====
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ===== COVERAGE REPORTS =====
+coverage/
+*.lcov
+.nyc_output/
+
+# ===== TEMPORARY FILES =====
+tmp/
+temp/
+.tmp/
+.temp/
+
+# ===== EDITOR FILES =====
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ===== OS FILES =====
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# ===== DEPLOYMENT =====
+deploy/
+dist/
+production/
+
+# ===== BACKUP FILES =====
+*.bak
+*.backup
+*.old
