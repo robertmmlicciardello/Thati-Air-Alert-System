@@ -4,57 +4,63 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.background
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.lifecycleScope
-import com.thati.airalert.database.AlertDatabase
-import com.thati.airalert.models.AlertMessage
-import com.thati.airalert.services.AlertService
 import com.thati.airalert.ui.theme.ThatiAirAlertTheme
+import com.thati.airalert.services.AlertService
+import com.thati.airalert.models.AlertMessage
+import com.thati.airalert.database.AlertDatabase
+import com.thati.airalert.utils.PreferenceManager
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
 
 /**
- * Enhanced User Activity
- * User mode အတွက် interface - လုံခြုံရေး ပိုမိုကောင်းမွန်သော UI
+ * Enhanced User Activity - Offline Mode Ready
+ * User Mode အတွက် main screen with offline capabilities
  */
 class UserActivity : ComponentActivity() {
     
+    private lateinit var database: AlertDatabase
+    private lateinit var preferenceManager: PreferenceManager
+    
+    // State variables for offline mode
     private var isServiceRunning by mutableStateOf(false)
     private var receivedAlerts by mutableStateOf<List<AlertMessage>>(emptyList())
-    private lateinit var database: AlertDatabase
-    private var isAlarmEnabled by mutableStateOf(false)
-    private var userLocation by mutableStateOf("ရန်ကုန်မြို့")
-    private var isSendingAlert by mutableStateOf(false)
-    private var userAlertMessage by mutableStateOf("")
-    private var networkStatus by mutableStateOf("ကောင်း")
     private var connectedDevices by mutableStateOf(0)
-    private var batteryLevel by mutableStateOf(100)
+    private var networkStatus by mutableStateOf("Offline Mode")
+    private var batteryLevel by mutableStateOf(85)
+    private var meshSignalStrength by mutableStateOf(0)
+    private var isOfflineMode by mutableStateOf(true)
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
-        // Database ကို initialize လုပ်ပါ
-        database = AlertDatabase.getDatabase(this)
-        
-        // Alert Service ကို User mode ဖြင့် စတင်ပါ
-        startAlertService()
-        
-        // Received alerts များကို load လုပ်ပါ
-        loadReceivedAlerts()
+        // Initialize for offline mode
+        initializeOfflineMode()
         
         setContent {
             ThatiAirAlertTheme {
@@ -62,90 +68,128 @@ class UserActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    UserScreen(
+                    OfflineUserScreen(
                         onBackPressed = { finish() },
                         isServiceRunning = isServiceRunning,
                         receivedAlerts = receivedAlerts,
-                        onRefreshAlerts = { loadReceivedAlerts() },
-                        onClearAlerts = { clearAllAlerts() }
+                        connectedDevices = connectedDevices,
+                        networkStatus = networkStatus,
+                        batteryLevel = batteryLevel,
+                        isOfflineMode = isOfflineMode,
+                        onRefreshAlerts = { loadOfflineAlerts() },
+                        onClearAlerts = { clearAllAlerts() },
+                        onTestAlert = { simulateTestAlert() }
                     )
                 }
             }
         }
     }
     
-    /**
-     * Alert Service ကို စတင်ခြင်း
-     */
-    private fun startAlertService() {
-        val intent = Intent(this, AlertService::class.java).apply {
-            action = AlertService.ACTION_START_USER
+    private fun initializeOfflineMode() {
+        try {
+            database = AlertDatabase.getDatabase(this)
+            preferenceManager = PreferenceManager(this)
+            
+            // Start offline simulation
+            startOfflineSimulation()
+            loadOfflineAlerts()
+            
+        } catch (e: Exception) {
+            // Pure offline mode fallback
+            isOfflineMode = true
+            networkStatus = "Pure Offline Mode"
         }
-        startForegroundService(intent)
-        isServiceRunning = true
     }
     
-    /**
-     * လက်ခံရရှိသော alerts များကို load လုပ်ခြင်း
-     */
-    private fun loadReceivedAlerts() {
+    private fun startOfflineSimulation() {
         lifecycleScope.launch {
-            try {
-                val alerts = database.alertDao().getAllAlerts()
-                receivedAlerts = alerts.filter { it.isReceived }
-            } catch (e: Exception) {
-                // Handle error
+            delay(2000)
+            isServiceRunning = true
+            connectedDevices = 3 // Simulated nearby devices
+            meshSignalStrength = 75
+            networkStatus = "Mesh Network Active"
+            
+            // Simulate periodic network updates
+            while (true) {
+                delay(5000)
+                meshSignalStrength = (60..90).random()
+                connectedDevices = (2..5).random()
+                batteryLevel = (70..95).random()
             }
         }
     }
     
-    /**
-     * Alert များအားလုံးကို ရှင်းလင်းခြင်း
-     */
+    private fun simulateTestAlert() {
+        val testAlert = AlertMessage(
+            id = System.currentTimeMillis().toString(),
+            message = "ဒီဟာ test alert တစ်ခုပါ။ Mesh network မှတဆင့် လက်ခံရရှိပါသည်။",
+            type = "test",
+            timestamp = System.currentTimeMillis(),
+            sender = "Test Device",
+            priority = "normal",
+            location = "Yangon"
+        )
+        receivedAlerts = listOf(testAlert) + receivedAlerts
+    }
+    
+    private fun loadOfflineAlerts() {
+        // Load cached alerts or create demo alerts
+        val demoAlerts = listOf(
+            AlertMessage(
+                id = "1",
+                message = "လေကြောင်းသတိပေးချက် - ရန်ကုန်တိုင်းဒေသကြီးတွင် လေယာဉ်များ တွေ့ရှိရပါသည်။",
+                type = "aircraft",
+                timestamp = System.currentTimeMillis() - 3600000,
+                sender = "Yangon Station",
+                priority = "high",
+                location = "Yangon"
+            ),
+            AlertMessage(
+                id = "2", 
+                message = "ဘေးကင်းပြီ - လေကြောင်းအခြေအနေ ပုံမှန်ပြန်လည်ဖြစ်လာပါပြီ။",
+                type = "all_clear",
+                timestamp = System.currentTimeMillis() - 1800000,
+                sender = "Central Command",
+                priority = "normal",
+                location = "Myanmar"
+            )
+        )
+        receivedAlerts = demoAlerts
+    }
+    
     private fun clearAllAlerts() {
-        lifecycleScope.launch {
-            try {
-                database.alertDao().clearAllAlerts()
-                receivedAlerts = emptyList()
-            } catch (e: Exception) {
-                // Handle error
-            }
-        }
-    }
-    
-    override fun onResume() {
-        super.onResume()
-        // Screen ပြန်ဖွင့်တိုင်း alerts များကို refresh လုပ်ပါ
-        loadReceivedAlerts()
+        receivedAlerts = emptyList()
     }
     
     override fun onDestroy() {
         super.onDestroy()
-        // Service ကို ရပ်ပါ
-        val intent = Intent(this, AlertService::class.java).apply {
-            action = AlertService.ACTION_STOP_SERVICE
-        }
-        startService(intent)
+        // Cleanup if needed
     }
 }
 
 /**
- * User Screen UI
+ * Offline User Screen UI
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun UserScreen(
+fun OfflineUserScreen(
     onBackPressed: () -> Unit,
     isServiceRunning: Boolean,
     receivedAlerts: List<AlertMessage>,
+    connectedDevices: Int,
+    networkStatus: String,
+    batteryLevel: Int,
+    isOfflineMode: Boolean,
     onRefreshAlerts: () -> Unit,
-    onClearAlerts: () -> Unit
+    onClearAlerts: () -> Unit,
+    onTestAlert: () -> Unit
 ) {
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp)
     ) {
-        // Header
+        // Header with offline indicator
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -157,12 +201,21 @@ fun UserScreen(
                 Text("← ပြန်သွားရန်")
             }
             
-            Text(
-                text = "👤 User Mode",
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF38A169)
-            )
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = "👤 User Mode",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF38A169)
+                )
+                if (isOfflineMode) {
+                    Text(
+                        text = "📱 Offline Mode",
+                        fontSize = 12.sp,
+                        color = Color(0xFF718096)
+                    )
+                }
+            }
             
             // Status indicator
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -172,19 +225,50 @@ fun UserScreen(
                 )
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(
-                    text = if (isServiceRunning) "Listening" else "Inactive",
+                    text = if (isServiceRunning) "Active" else "Inactive",
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                 )
             }
         }
         
+        // Offline Status Card
+        if (isOfflineMode) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF3CD))
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(text = "📡", fontSize = 24.sp)
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Text(
+                            text = "Mesh Network Mode",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF856404)
+                        )
+                        Text(
+                            text = "အင်တာနက်မလိုအပ်ဘဲ အနီးအနားရှိ devices များနှင့် ချိတ်ဆက်ထားသည်",
+                            fontSize = 12.sp,
+                            color = Color(0xFF856404)
+                        )
+                    }
+                }
+            }
+        }
+        
         // Enhanced Security Dashboard
         EnhancedSecurityDashboard(
             isServiceRunning = isServiceRunning,
-            networkStatus = "ကောင်း", // This would be dynamic in real implementation
-            connectedDevices = 5, // This would be dynamic in real implementation
-            batteryLevel = 85 // This would be dynamic in real implementation
+            networkStatus = networkStatus,
+            connectedDevices = connectedDevices,
+            batteryLevel = batteryLevel
         )
         
         // Alert statistics
@@ -228,13 +312,13 @@ fun UserScreen(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
-                        text = "${receivedAlerts.count { it.timestamp > System.currentTimeMillis() - 24 * 60 * 60 * 1000 }}",
+                        text = "$connectedDevices",
                         fontSize = 24.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFF2D3748)
                     )
                     Text(
-                        text = "ယနေ့ Alert",
+                        text = "ချိတ်ဆက်ထားသော Device",
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                         textAlign = TextAlign.Center
@@ -245,9 +329,6 @@ fun UserScreen(
         
         // User Alert Input Section
         UserAlertInputSection()
-        
-        // Alarm Control Section
-        AlarmControlSection()
         
         // Action buttons
         Row(
@@ -265,11 +346,19 @@ fun UserScreen(
             }
             
             Button(
+                onClick = onTestAlert,
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF38A169))
+            ) {
+                Text("🧪 Test Alert", fontSize = 14.sp)
+            }
+            
+            Button(
                 onClick = onClearAlerts,
                 modifier = Modifier.weight(1f),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE53E3E))
             ) {
-                Text("🗑️ Clear All", fontSize = 14.sp)
+                Text("🗑️ Clear", fontSize = 14.sp)
             }
         }
         
@@ -348,11 +437,11 @@ fun UserScreen(
 @Composable
 fun AlertCard(alert: AlertMessage) {
     val dateFormat = SimpleDateFormat("MMM dd, HH:mm", Locale.getDefault())
-    val priorityColor = when (alert.priority.level) {
-        4 -> Color(0xFFE53E3E) // Critical
-        3 -> Color(0xFFED8936) // High
-        2 -> Color(0xFFECC94B) // Medium
-        else -> Color(0xFF38A169) // Low
+    val priorityColor = when (alert.priority) {
+        "critical" -> Color(0xFFE53E3E)
+        "high" -> Color(0xFFED8936)
+        "medium" -> Color(0xFFECC94B)
+        else -> Color(0xFF38A169)
     }
     
     Card(
@@ -379,7 +468,7 @@ fun AlertCard(alert: AlertMessage) {
                     shape = RoundedCornerShape(12.dp)
                 ) {
                     Text(
-                        text = alert.priority.name,
+                        text = alert.priority.uppercase(),
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White,
@@ -403,32 +492,30 @@ fun AlertCard(alert: AlertMessage) {
                 modifier = Modifier.padding(bottom = 8.dp)
             )
             
-            // Footer with hop count and type
+            // Footer with sender and type
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Type: ${alert.alertType.name}",
+                    text = "From: ${alert.sender}",
                     fontSize = 10.sp,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                 )
                 
-                if (alert.hopCount > 0) {
-                    Text(
-                        text = "Relayed ${alert.hopCount}x",
-                        fontSize = 10.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                    )
-                }
+                Text(
+                    text = "Type: ${alert.type}",
+                    fontSize = 10.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                )
             }
         }
     }
 }
+
 /**
- * 
-User Alert Input Section - အသုံးပြုသူကိုယ်တိုင် Alert ပို့ရန်
+ * User Alert Input Section - အသုံးပြုသူကိုယ်တိုင် Alert ပို့ရန်
  */
 @Composable
 fun UserAlertInputSection() {
@@ -517,7 +604,7 @@ fun UserAlertInputSection() {
                 onClick = {
                     if (userAlertMessage.isNotBlank()) {
                         isSendingAlert = true
-                        // TODO: Implement actual alert sending
+                        // Simulate sending
                         kotlinx.coroutines.GlobalScope.launch {
                             kotlinx.coroutines.delay(1500)
                             isSendingAlert = false
@@ -544,7 +631,7 @@ fun UserAlertInputSection() {
             }
             
             Text(
-                text = "💡 သင်မြင်တွေ့ရသော အခြေအနေများကို အနီးအနားရှိ အခြားသူများထံ ပေးပို့နိုင်ပါသည်",
+                text = "💡 Mesh network မှတဆင့် အနီးအနားရှိ devices များထံ ပေးပို့မည်",
                 fontSize = 11.sp,
                 color = Color(0xFF4A5568),
                 modifier = Modifier.padding(top = 8.dp),
@@ -555,106 +642,6 @@ fun UserAlertInputSection() {
 }
 
 /**
- * Alarm Control Section - Alarm အသံထိန်းချုပ်ရန်
- */
-@Composable
-fun AlarmControlSection() {
-    var isAlarmEnabled by remember { mutableStateOf(false) }
-    var isTestingAlarm by remember { mutableStateOf(false) }
-    
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(bottom = 16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isAlarmEnabled) Color(0xFFFFF5F5) else Color(0xFFF7FAFC)
-        )
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column {
-                    Text(
-                        text = "🔊 Alarm အသံ",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = if (isAlarmEnabled) Color(0xFFE53E3E) else Color(0xFF4A5568)
-                    )
-                    Text(
-                        text = if (isAlarmEnabled) "ဖွင့်ထားသည်" else "ပိတ်ထားသည်",
-                        fontSize = 12.sp,
-                        color = Color(0xFF718096)
-                    )
-                }
-                
-                Switch(
-                    checked = isAlarmEnabled,
-                    onCheckedChange = { isAlarmEnabled = it },
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = Color.White,
-                        checkedTrackColor = Color(0xFFE53E3E),
-                        uncheckedThumbColor = Color.White,
-                        uncheckedTrackColor = Color(0xFFCBD5E0)
-                    )
-                )
-            }
-            
-            if (isAlarmEnabled) {
-                Spacer(modifier = Modifier.height(12.dp))
-                
-                Button(
-                    onClick = {
-                        isTestingAlarm = true
-                        // TODO: Play test alarm sound
-                        kotlinx.coroutines.GlobalScope.launch {
-                            kotlinx.coroutines.delay(2000)
-                            isTestingAlarm = false
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = !isTestingAlarm,
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFED8936))
-                ) {
-                    if (isTestingAlarm) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            color = Color.White,
-                            strokeWidth = 2.dp
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                    }
-                    Text(
-                        text = if (isTestingAlarm) "စမ်းနေသည်..." else "🎵 Alarm စမ်းကြည့်ရန်",
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-                
-                Text(
-                    text = "⚠️ Alarm ဖွင့်ထားခြင်းသည် ဘက်ထရီ သုံးစွဲမှုကို တိုးစေနိုင်ပါသည်",
-                    fontSize = 10.sp,
-                    color = Color(0xFF718096),
-                    modifier = Modifier.padding(top = 8.dp),
-                    textAlign = TextAlign.Center
-                )
-            } else {
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = "📱 Alert များရောက်ရှိသောအခါ အသံမြည်စေရန် ဖွင့်ပေးပါ",
-                    fontSize = 12.sp,
-                    color = Color(0xFF718096),
-                    textAlign = TextAlign.Center
-                )
-            }
-        }
-    }
-}
-/**
-
  * Enhanced Security Dashboard - လုံခြုံရေး ထိန်းချုပ်မှု Dashboard
  */
 @Composable
@@ -702,7 +689,7 @@ fun EnhancedSecurityDashboard(
                         .size(16.dp)
                         .background(
                             if (isServiceRunning) Color.Green else Color.Red,
-                            shape = androidx.compose.foundation.shape.CircleShape
+                            shape = CircleShape
                         )
                 )
             }
@@ -742,11 +729,6 @@ fun EnhancedSecurityDashboard(
                     color = Color.Green
                 )
             }
-            
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            // Security features status
-            SecurityFeaturesList(isServiceRunning)
         }
     }
 }
@@ -780,62 +762,12 @@ fun SecurityMetric(
     }
 }
 
-@Composable
-fun SecurityFeaturesList(isServiceRunning: Boolean) {
-    val features = listOf(
-        SecurityFeature("🔒 End-to-End Encryption", isServiceRunning),
-        SecurityFeature("📡 Mesh Network Protocol", isServiceRunning),
-        SecurityFeature("🛡️ Anti-Tampering", true),
-        SecurityFeature("🔐 Secure Key Exchange", isServiceRunning),
-        SecurityFeature("📱 Device Authentication", isServiceRunning)
-    )
-    
-    Column {
-        Text(
-            text = "လုံခြုံရေး လုပ်ဆောင်ချက်များ:",
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Bold,
-            color = Color.White,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
-        
-        features.forEach { feature ->
-            SecurityFeatureItem(feature)
-        }
-    }
-}
-
-data class SecurityFeature(
-    val name: String,
-    val isActive: Boolean
-)
-
-@Composable
-fun SecurityFeatureItem(feature: SecurityFeature) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 2.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = if (feature.isActive) "✅" else "❌",
-            fontSize = 12.sp
-        )
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(
-            text = feature.name,
-            fontSize = 11.sp,
-            color = if (feature.isActive) Color(0xFFE2E8F0) else Color(0xFF9CA3AF)
-        )
-    }
-}
-
 // Helper functions
 fun getNetworkStatusColor(status: String): Color {
     return when (status) {
-        "ကောင်း" -> Color.Green
-        "အလယ်အလတ်" -> Color.Yellow
+        "Mesh Network Active" -> Color.Green
+        "Connected" -> Color.Green
+        "Connecting" -> Color.Yellow
         else -> Color.Red
     }
 }

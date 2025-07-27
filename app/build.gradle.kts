@@ -23,8 +23,15 @@ android {
     }
 
     buildTypes {
+        debug {
+            isMinifyEnabled = false
+            isDebuggable = true
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
+        }
         release {
             isMinifyEnabled = false
+            isDebuggable = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -68,6 +75,12 @@ dependencies {
     
     // Navigation
     implementation("androidx.navigation:navigation-compose:2.7.5")
+    
+    // Security
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
+    
+    // LocalBroadcastManager
+    implementation("androidx.localbroadcastmanager:localbroadcastmanager:1.1.0")
     
     // ViewModel
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")

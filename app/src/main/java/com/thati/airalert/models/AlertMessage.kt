@@ -5,7 +5,7 @@ import androidx.room.PrimaryKey
 import kotlinx.serialization.Serializable
 
 /**
- * Alert Message ဒေတာ မော်ဒယ်
+ * Alert Message ဒေတာ မော်ဒယ် - Offline Mode Compatible
  * Wi-Fi Direct နှင့် BLE မှတစ်ဆင့် ပို့ဆောင်မည့် သတိပေးချက် စာသားများ
  */
 @Serializable
@@ -15,13 +15,55 @@ data class AlertMessage(
     val id: String, // Unique identifier (UUID)
     val message: String, // သတိပေးချက် စာသား
     val timestamp: Long, // Unix timestamp (milliseconds)
-    val senderDeviceId: String, // ပို့သူ device ၏ ID
-    val priority: AlertPriority = AlertPriority.HIGH, // ဦးစားပေးမှု အဆင့်
-    val alertType: AlertType = AlertType.AIR_RAID, // သတိပေးချက် အမျိုးအစား
+    val sender: String = "Unknown", // ပို့သူ အမည် (offline mode အတွက်)
+    val type: String = "general", // Alert အမျိုးအစား (offline mode အတွက်)
+    val priority: String = "medium", // ဦးစားပေးမှု အဆင့် (offline mode အတွက်)
+    val location: String = "Myanmar", // တည်နေရာ
     val hopCount: Int = 0, // Mesh network မှာ ဘယ်နှစ်ဆင့် ကူးလာပြီးလဲ
     val maxHops: Int = 5, // အများဆုံး ဘယ်နှစ်ဆင့် ကူးခွင့်ပြုမလဲ
-    val isReceived: Boolean = false // လက်ခံရရှိပြီးလား
-)
+    val isReceived: Boolean = false, // လက်ခံရရှိပြီးလား
+    
+    // Legacy fields for backward compatibility
+    val senderDeviceId: String = sender, // ပို့သူ device ၏ ID
+    val alertPriority: AlertPriority = AlertPriority.HIGH, // ဦးစားပေးမှု အဆင့်
+    val alertType: AlertType = AlertType.AIR_RAID // သတိပေးချက် အမျိုးအစား
+) {
+    // Secondary constructor for offline mode
+    constructor(
+        id: String,
+        message: String,
+        type: String,
+        timestamp: Long,
+        sender: String,
+        priority: String,
+        location: String
+    ) : this(
+        id = id,
+        message = message,
+        timestamp = timestamp,
+        sender = sender,
+        type = type,
+        priority = priority,
+        location = location,
+        hopCount = 0,
+        maxHops = 5,
+        isReceived = false,
+        senderDeviceId = sender,
+        alertPriority = when (priority) {
+            "critical" -> AlertPriority.CRITICAL
+            "high" -> AlertPriority.HIGH
+            "medium" -> AlertPriority.MEDIUM
+            else -> AlertPriority.LOW
+        },
+        alertType = when (type) {
+            "emergency" -> AlertType.EMERGENCY
+            "evacuation" -> AlertType.EVACUATION
+            "all_clear" -> AlertType.ALL_CLEAR
+            "test" -> AlertType.TEST
+            else -> AlertType.AIR_RAID
+        }
+    )
+}
 
 /**
  * သတိပေးချက် ဦးစားပေးမှု အဆင့်များ

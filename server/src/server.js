@@ -11,8 +11,7 @@ const alertRoutes = require('./routes/alerts');
 const deviceRoutes = require('./routes/devices');
 const adminRoutes = require('./routes/admin');
 const { authenticateToken } = require('./middleware/auth');
-const { setupDatabase } = require('./database/setup');
-const { setupRedis } = require('./services/redis');
+const database = require('./database/sqlite');
 const { setupWebSocket } = require('./services/websocket');
 const logger = require('./utils/logger');
 
@@ -26,6 +25,7 @@ const io = socketIo(server, {
 });
 
 const PORT = process.env.PORT || 3000;
+const HOST = process.env.HOST || '0.0.0.0';
 
 // Security middleware
 app.use(helmet());
@@ -102,18 +102,16 @@ app.use('*', (req, res) => {
 // Initialize services
 async function initializeServer() {
     try {
-        // Setup database
-        await setupDatabase();
-        logger.info('Database connected successfully');
-
-        // Setup Redis
-        await setupRedis();
-        logger.info('Redis connected successfully');
+        // Setup SQLite database
+        await database.connect();
+        logger.info('SQLite database connected successfully');
 
         // Start server
-        server.listen(PORT, () => {
-            logger.info(`Thati Alert Server running on port ${PORT}`);
+        server.listen(PORT, HOST, () => {
+            logger.info(`Thati Alert Server running on ${HOST}:${PORT}`);
             logger.info(`Environment: ${process.env.NODE_ENV || 'development'}`);
+            logger.info(`Admin Dashboard: http://localhost:3001`);
+            logger.info(`API Docs: http://${HOST}:${PORT}/api/docs`);
         });
 
     } catch (error) {

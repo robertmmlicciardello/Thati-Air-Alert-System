@@ -1,274 +1,354 @@
 import React, { useState, useEffect } from 'react';
 import {
+  Box,
   Grid,
   Card,
   CardContent,
   Typography,
-  Box,
-  Paper,
-  IconButton,
+  Button,
+  TextField,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
   Chip,
-  LinearProgress,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemSecondaryAction,
+  IconButton,
   Alert,
-  Divider,
+  Paper,
+  Divider
 } from '@mui/material';
 import {
-  Refresh as RefreshIcon,
   Warning as WarningIcon,
-  CheckCircle as CheckCircleIcon,
-  Error as ErrorIcon,
+  Send as SendIcon,
   People as PeopleIcon,
   Devices as DevicesIcon,
-  Notifications as NotificationsIcon,
-  TrendingUp as TrendingUpIcon,
+  NetworkWifi as NetworkIcon,
+  Delete as DeleteIcon,
+  CheckCircle as CheckIcon
 } from '@mui/icons-material';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from 'recharts';
-import { useQuery } from 'react-query';
-import { format } from 'date-fns';
-import toast from 'react-hot-toast';
 
-import { dashboardApi } from '../services/api';
-import { useWebSocket } from '../hooks/useWebSocket';
-import StatCard from '../components/dashboard/StatCard';
-import AlertsTable from '../components/dashboard/AlertsTable';
-import NetworkStatus from '../components/dashboard/NetworkStatus';
-import LoadingSpinner from '../components/common/LoadingSpinner';
+// Mock data for offline mode
+const mockDevices = [
+  { id: 1, name: 'Device-001', status: 'online', location: 'Yangon Central', lastSeen: new Date() },
+  { id: 2, name: 'Device-002', status: 'online', location: 'Mandalay North', lastSeen: new Date() },
+  { id: 3, name: 'Device-003', status: 'offline', location: 'Naypyidaw', lastSeen: new Date(Date.now() - 300000) }
+];
 
-const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
+const mockUsers = [
+  { id: 1, name: 'Admin User', role: 'admin', status: 'active' },
+  { id: 2, name: 'Regional Admin', role: 'regional', status: 'active' },
+  { id: 3, name: 'Local Operator', role: 'operator', status: 'active' }
+];
 
-function Dashboard() {
-  const [refreshing, setRefreshing] = useState(false);
-  const [realTimeData, setRealTimeData] = useState({});
+export default function Dashboard() {
+  const [devices, setDevices] = useState(mockDevices);
+  const [users, setUsers] = useState(mockUsers);
+  const [alerts, setAlerts] = useState([]);
+  const [openAlertDialog, setOpenAlertDialog] = useState(false);
+  const [alertMessage, setAlertMessage] = useState('');
+  const [alertType, setAlertType] = useState('warning');
+  const [sentAlerts, setSentAlerts] = useState([]);
 
-  // Fetch dashboard data
-  const { data: dashboardData, isLoading, error, refetch } = useQuery(
-    'dashboard',
-    dashboardApi.getDashboardStats,
-    {
-      refetchInterval: 30000, // Refresh every 30 seconds
-    }
-  );
+  // Stats calculation
+  const onlineDevices = devices.filter(d => d.status === 'online').length;
+  const totalDevices = devices.length;
+  const activeUsers = users.filter(u => u.status === 'active').length;
 
-  // WebSocket for real-time updates
-  const { socket, connected } = useWebSocket();
+  const handleSendAlert = () => {
+    if (!alertMessage.trim()) return;
 
-  useEffect(() => {
-    if (socket) {
-      socket.on('dashboard_update', (data) => {
-        setRealTimeData(data);
-      });
+    const newAlert = {
+      id: Date.now(),
+      message: alertMessage,
+      type: alertType,
+      timestamp: new Date(),
+      status: 'sent',
+      recipients: onlineDevices
+    };
 
-      socket.on('new_alert', (alert) => {
-        toast.success(`New ${alert.type} alert received from ${alert.region || 'Unknown region'}`);
-      });
-
-      socket.on('system_status', (status) => {
-        if (status.level === 'error') {
-          toast.error(status.message);
-        } else if (status.level === 'warning') {
-          toast.warning(status.message);
-        }
-      });
-
-      return () => {
-        socket.off('dashboard_update');
-        socket.off('new_alert');
-        socket.off('system_status');
-      };
-    }
-  }, [socket]);
-
-  const handleRefresh = async () => {
-    setRefreshing(true);
-    try {
-      await refetch();
-      toast.success('Dashboard refreshed successfully');
-    } catch (err) {
-      toast.error('Failed to refresh dashboard');
-    } finally {
-      setRefreshing(false);
-    }
+    setSentAlerts(prev => [newAlert, ...prev]);
+    setAlerts(prev => [newAlert, ...prev]);
+    setAlertMessage('');
+    setOpenAlertDialog(false);
   };
 
-  if (isLoading) return <LoadingSpinner />;
-  if (error) return <Alert severity="error">Failed to load dashboard data</Alert>;
-
-  const stats = { ...dashboardData, ...realTimeData };
+  const handleDeleteAlert = (alertId) => {
+    setSentAlerts(prev => prev.filter(alert => alert.id !== alertId));
+  };
 
   return (
     <Box>
-      {/* Header */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h4" component="h1" fontWeight="bold">
-          Dashboard
-        </Typography>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <Chip
-            icon={connected ? <CheckCircleIcon /> : <ErrorIcon />}
-            label={connected ? 'Connected' : 'Disconnected'}
-            color={connected ? 'success' : 'error'}
-            variant="outlined"
-          />
-          <IconButton onClick={handleRefresh} disabled={refreshing}>
-            <RefreshIcon sx={{ animation: refreshing ? 'spin 1s linear infinite' : 'none' }} />
-          </IconButton>
-        </Box>
-      </Box>
+      <Typography variant="h4" gutterBottom>
+        Dashboard - Offline Mode
+      </Typography>
+      
+      <Alert severity="info" sx={{ mb: 3 }}>
+        Running in offline mode with demo data. Mesh network simulation active.
+      </Alert>
 
       {/* Stats Cards */}
       <Grid container spacing={3} sx={{ mb: 3 }}>
         <Grid item xs={12} sm={6} md={3}>
-          <StatCard
-            title="Total Alerts"
-            value={stats.totalAlerts || 0}
-            change={stats.alertsChange || 0}
-            icon={<NotificationsIcon />}
-            color="primary"
-          />
-        </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <StatCard
-            title="Active Users"
-            value={stats.activeUsers || 0}
-            change={stats.usersChange || 0}
-            icon={<PeopleIcon />}
-            color="success"
-          />
-        </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <StatCard
-            title="Connected Devices"
-            value={stats.connectedDevices || 0}
-            change={stats.devicesChange || 0}
-            icon={<DevicesIcon />}
-            color="info"
-          />
-        </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <StatCard
-            title="System Health"
-            value={`${stats.systemHealth || 100}%`}
-            change={stats.healthChange || 0}
-            icon={<TrendingUpIcon />}
-            color="warning"
-          />
-        </Grid>
-      </Grid>
-
-      {/* Charts Row */}
-      <Grid container spacing={3} sx={{ mb: 3 }}>
-        {/* Alert Trends */}
-        <Grid item xs={12} md={8}>
           <Card>
             <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Alert Trends (Last 7 Days)
-              </Typography>
-              <Box sx={{ height: 300 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={stats.alertTrends || []}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis 
-                      dataKey="date" 
-                      tickFormatter={(value) => format(new Date(value), 'MMM dd')}
-                    />
-                    <YAxis />
-                    <Tooltip 
-                      labelFormatter={(value) => format(new Date(value), 'MMM dd, yyyy')}
-                    />
-                    <Line 
-                      type="monotone" 
-                      dataKey="alerts" 
-                      stroke="#1976d2" 
-                      strokeWidth={2}
-                      dot={{ fill: '#1976d2' }}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
+              <Box display="flex" alignItems="center">
+                <DevicesIcon color="primary" sx={{ mr: 2 }} />
+                <Box>
+                  <Typography color="textSecondary" gutterBottom>
+                    Active Devices
+                  </Typography>
+                  <Typography variant="h4">
+                    {onlineDevices}/{totalDevices}
+                  </Typography>
+                </Box>
               </Box>
             </CardContent>
           </Card>
         </Grid>
 
-        {/* Alert Types Distribution */}
-        <Grid item xs={12} md={4}>
+        <Grid item xs={12} sm={6} md={3}>
           <Card>
             <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Alert Types
-              </Typography>
-              <Box sx={{ height: 300 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={stats.alertTypes || []}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                      outerRadius={80}
-                      fill="#8884d8"
-                      dataKey="value"
-                    >
-                      {(stats.alertTypes || []).map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                  </PieChart>
-                </ResponsiveContainer>
+              <Box display="flex" alignItems="center">
+                <PeopleIcon color="primary" sx={{ mr: 2 }} />
+                <Box>
+                  <Typography color="textSecondary" gutterBottom>
+                    Active Users
+                  </Typography>
+                  <Typography variant="h4">
+                    {activeUsers}
+                  </Typography>
+                </Box>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid item xs={12} sm={6} md={3}>
+          <Card>
+            <CardContent>
+              <Box display="flex" alignItems="center">
+                <WarningIcon color="warning" sx={{ mr: 2 }} />
+                <Box>
+                  <Typography color="textSecondary" gutterBottom>
+                    Alerts Sent
+                  </Typography>
+                  <Typography variant="h4">
+                    {sentAlerts.length}
+                  </Typography>
+                </Box>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid item xs={12} sm={6} md={3}>
+          <Card>
+            <CardContent>
+              <Box display="flex" alignItems="center">
+                <NetworkIcon color="success" sx={{ mr: 2 }} />
+                <Box>
+                  <Typography color="textSecondary" gutterBottom>
+                    Network Status
+                  </Typography>
+                  <Typography variant="h6" color="success.main">
+                    Mesh Active
+                  </Typography>
+                </Box>
               </Box>
             </CardContent>
           </Card>
         </Grid>
       </Grid>
 
-      {/* Network Status and Recent Alerts */}
       <Grid container spacing={3}>
-        {/* Network Status */}
-        <Grid item xs={12} md={4}>
-          <NetworkStatus data={stats.networkStatus} />
+        {/* Send Alert Section */}
+        <Grid item xs={12} md={6}>
+          <Card>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
+                Send Emergency Alert
+              </Typography>
+              <Button
+                variant="contained"
+                color="error"
+                startIcon={<SendIcon />}
+                onClick={() => setOpenAlertDialog(true)}
+                fullWidth
+                size="large"
+              >
+                Send Alert to All Devices
+              </Button>
+            </CardContent>
+          </Card>
         </Grid>
 
         {/* Recent Alerts */}
-        <Grid item xs={12} md={8}>
+        <Grid item xs={12} md={6}>
           <Card>
             <CardContent>
               <Typography variant="h6" gutterBottom>
-                Recent Alerts
+                Recent Alerts ({sentAlerts.length})
               </Typography>
-              <AlertsTable alerts={stats.recentAlerts || []} compact />
+              {sentAlerts.length === 0 ? (
+                <Typography color="textSecondary">
+                  No alerts sent yet
+                </Typography>
+              ) : (
+                <List dense>
+                  {sentAlerts.slice(0, 3).map((alert) => (
+                    <ListItem key={alert.id}>
+                      <ListItemText
+                        primary={alert.message}
+                        secondary={
+                          <Box>
+                            <Typography variant="caption" display="block">
+                              {alert.timestamp.toLocaleString()}
+                            </Typography>
+                            <Chip 
+                              icon={<CheckIcon />}
+                              label={`Sent to ${alert.recipients} devices`}
+                              size="small"
+                              color="success"
+                              variant="outlined"
+                            />
+                          </Box>
+                        }
+                      />
+                      <ListItemSecondaryAction>
+                        <IconButton 
+                          edge="end" 
+                          onClick={() => handleDeleteAlert(alert.id)}
+                          size="small"
+                        >
+                          <DeleteIcon />
+                        </IconButton>
+                      </ListItemSecondaryAction>
+                    </ListItem>
+                  ))}
+                </List>
+              )}
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* Connected Devices */}
+        <Grid item xs={12} md={6}>
+          <Card>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
+                Connected Devices
+              </Typography>
+              <List dense>
+                {devices.map((device) => (
+                  <ListItem key={device.id}>
+                    <ListItemText
+                      primary={device.name}
+                      secondary={`${device.location} • ${device.status}`}
+                    />
+                    <Chip
+                      label={device.status}
+                      color={device.status === 'online' ? 'success' : 'error'}
+                      size="small"
+                    />
+                  </ListItem>
+                ))}
+              </List>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* System Status */}
+        <Grid item xs={12} md={6}>
+          <Card>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
+                System Status
+              </Typography>
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="body2" color="textSecondary">
+                  Mesh Network
+                </Typography>
+                <Chip label="Active" color="success" size="small" />
+              </Box>
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="body2" color="textSecondary">
+                  Alert System
+                </Typography>
+                <Chip label="Ready" color="success" size="small" />
+              </Box>
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="body2" color="textSecondary">
+                  Database
+                </Typography>
+                <Chip label="Offline Mode" color="warning" size="small" />
+              </Box>
             </CardContent>
           </Card>
         </Grid>
       </Grid>
 
-      {/* System Status */}
-      {stats.systemAlerts && stats.systemAlerts.length > 0 && (
-        <Box sx={{ mt: 3 }}>
-          <Typography variant="h6" gutterBottom>
-            System Alerts
-          </Typography>
-          {stats.systemAlerts.map((alert, index) => (
-            <Alert 
-              key={index} 
-              severity={alert.severity} 
-              sx={{ mb: 1 }}
-              action={
-                alert.action && (
-                  <IconButton size="small" onClick={alert.action}>
-                    <RefreshIcon />
-                  </IconButton>
-                )
-              }
-            >
-              {alert.message}
-            </Alert>
-          ))}
-        </Box>
-      )}
+      {/* Send Alert Dialog */}
+      <Dialog open={openAlertDialog} onClose={() => setOpenAlertDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Send Emergency Alert</DialogTitle>
+        <DialogContent>
+          <TextField
+            autoFocus
+            margin="dense"
+            label="Alert Message"
+            fullWidth
+            multiline
+            rows={4}
+            variant="outlined"
+            value={alertMessage}
+            onChange={(e) => setAlertMessage(e.target.value)}
+            placeholder="Enter emergency alert message..."
+          />
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="body2" gutterBottom>
+              Alert Type:
+            </Typography>
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              <Chip
+                label="Warning"
+                color={alertType === 'warning' ? 'warning' : 'default'}
+                onClick={() => setAlertType('warning')}
+                clickable
+              />
+              <Chip
+                label="Emergency"
+                color={alertType === 'emergency' ? 'error' : 'default'}
+                onClick={() => setAlertType('emergency')}
+                clickable
+              />
+              <Chip
+                label="Info"
+                color={alertType === 'info' ? 'info' : 'default'}
+                onClick={() => setAlertType('info')}
+                clickable
+              />
+            </Box>
+          </Box>
+          <Alert severity="info" sx={{ mt: 2 }}>
+            This alert will be sent to {onlineDevices} online devices via mesh network.
+          </Alert>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenAlertDialog(false)}>Cancel</Button>
+          <Button 
+            onClick={handleSendAlert} 
+            variant="contained" 
+            color="error"
+            disabled={!alertMessage.trim()}
+          >
+            Send Alert
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
-
-export default Dashboard;

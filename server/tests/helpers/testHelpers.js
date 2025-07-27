@@ -21,39 +21,39 @@ const authHelpers = {
             role: 'user',
             region: 'yangon'
         };
-        
+
         const defaultOptions = {
             expiresIn: '1h'
         };
-        
+
         return jwt.sign(
             { ...defaultPayload, ...payload },
             process.env.JWT_SECRET || 'test-secret',
             { ...defaultOptions, ...options }
         );
     },
-    
+
     /**
      * Generate an expired JWT token
      */
     generateExpiredToken(payload = {}) {
         return this.generateToken(payload, { expiresIn: '-1h' });
     },
-    
+
     /**
      * Generate an admin token
      */
     generateAdminToken(payload = {}) {
         return this.generateToken({ ...payload, role: 'admin' });
     },
-    
+
     /**
      * Hash a password
      */
     async hashPassword(password) {
         return await bcrypt.hash(password, 10);
     },
-    
+
     /**
      * Verify a password
      */
@@ -83,7 +83,7 @@ const dataHelpers = {
             ...overrides
         };
     },
-    
+
     /**
      * Generate test alert data
      */
@@ -104,7 +104,7 @@ const dataHelpers = {
             ...overrides
         };
     },
-    
+
     /**
      * Generate test device data
      */
@@ -125,7 +125,7 @@ const dataHelpers = {
             ...overrides
         };
     },
-    
+
     /**
      * Generate coordinates within Myanmar
      */
@@ -135,13 +135,13 @@ const dataHelpers = {
         const maxLat = 28.5;
         const minLng = 92.2;
         const maxLng = 101.2;
-        
+
         return {
             latitude: minLat + Math.random() * (maxLat - minLat),
             longitude: minLng + Math.random() * (maxLng - minLng)
         };
     },
-    
+
     /**
      * Generate random string
      */
@@ -172,7 +172,7 @@ const dbHelpers = {
             console.error('Cleanup failed:', error);
         }
     },
-    
+
     /**
      * Insert test user
      */
@@ -182,7 +182,7 @@ const dbHelpers = {
             user.password_hash = await authHelpers.hashPassword(user.password);
             delete user.password;
         }
-        
+
         const result = await db.query(`
             INSERT INTO users (id, username, email, password_hash, name, role, region, status, created_at)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
@@ -191,16 +191,16 @@ const dbHelpers = {
             user.id, user.username, user.email, user.password_hash || 'dummy_hash',
             user.name, user.role, user.region, user.status, user.created_at
         ]);
-        
+
         return result.rows[0];
     },
-    
+
     /**
      * Insert test alert
      */
     async insertTestAlert(db, userId, alertData = {}) {
         const alert = dataHelpers.generateAlertData({ user_id: userId, ...alertData });
-        
+
         const result = await db.query(`
             INSERT INTO alerts (id, user_id, message, type, priority, region, coordinates, created_at, status, delivery_count)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
@@ -210,16 +210,16 @@ const dbHelpers = {
             alert.region, JSON.stringify(alert.coordinates), alert.created_at,
             alert.status, alert.delivery_count
         ]);
-        
+
         return result.rows[0];
     },
-    
+
     /**
      * Insert test device
      */
     async insertTestDevice(db, userId, deviceData = {}) {
         const device = dataHelpers.generateDeviceData({ user_id: userId, ...deviceData });
-        
+
         const result = await db.query(`
             INSERT INTO devices (id, user_id, device_id, name, type, model, status, battery_level, is_charging, network_type, signal_strength, created_at)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
@@ -229,7 +229,7 @@ const dbHelpers = {
             device.model, device.status, device.battery_level, device.is_charging,
             device.network_type, device.signal_strength, device.created_at
         ]);
-        
+
         return result.rows[0];
     }
 };
@@ -244,28 +244,28 @@ const httpHelpers = {
     createAuthHeader(token) {
         return { Authorization: `Bearer ${token}` };
     },
-    
+
     /**
      * Create request with auth
      */
     createAuthenticatedRequest(request, token) {
         return request.set('Authorization', `Bearer ${token}`);
     },
-    
+
     /**
      * Extract error from response
      */
     extractError(response) {
         return response.body.error || { code: 'UNKNOWN', message: 'Unknown error' };
     },
-    
+
     /**
      * Check if response is successful
      */
     isSuccessResponse(response) {
         return response.body.success === true;
     },
-    
+
     /**
      * Check if response has error
      */
@@ -286,7 +286,7 @@ const wsHelpers = {
         const wsUrl = token ? `${url}?token=${token}` : url;
         return new WebSocket(wsUrl);
     },
-    
+
     /**
      * Wait for WebSocket message
      */
@@ -295,7 +295,7 @@ const wsHelpers = {
             const timer = setTimeout(() => {
                 reject(new Error('WebSocket message timeout'));
             }, timeout);
-            
+
             ws.once('message', (data) => {
                 clearTimeout(timer);
                 try {
@@ -306,7 +306,7 @@ const wsHelpers = {
             });
         });
     },
-    
+
     /**
      * Send WebSocket message
      */
@@ -326,7 +326,7 @@ const timeHelpers = {
     async wait(ms) {
         return new Promise(resolve => setTimeout(resolve, ms));
     },
-    
+
     /**
      * Get ISO string for date offset
      */
@@ -337,7 +337,7 @@ const timeHelpers = {
         date.setMinutes(date.getMinutes() + minutes);
         return date.toISOString();
     },
-    
+
     /**
      * Check if date is within range
      */
@@ -358,7 +358,7 @@ const validationHelpers = {
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         return emailRegex.test(email);
     },
-    
+
     /**
      * Validate UUID format
      */
@@ -366,14 +366,14 @@ const validationHelpers = {
         const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
         return uuidRegex.test(uuid);
     },
-    
+
     /**
      * Validate coordinates
      */
     isValidCoordinates(lat, lng) {
         return lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
     },
-    
+
     /**
      * Validate Myanmar coordinates
      */

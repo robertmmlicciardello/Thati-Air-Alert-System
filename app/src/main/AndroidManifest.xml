@@ -43,6 +43,7 @@
         android:required="true" />
 
     <application
+        android:name="android.app.Application"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
@@ -51,11 +52,12 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.ThatiAirAlert"
+
         tools:targetApi="31">
         
         <!-- Main Activity -->
         <activity
-            android:name=".MainActivity"
+            android:name=".SimpleMainActivity"
             android:exported="true"
             android:theme="@style/Theme.ThatiAirAlert">
             <intent-filter>
@@ -64,15 +66,29 @@
             </intent-filter>
         </activity>
         
-        <!-- Admin Activity -->
-        <activity
-            android:name=".AdminActivity"
-            android:exported="false"
-            android:theme="@style/Theme.ThatiAirAlert" />
+
         
         <!-- User Activity -->
         <activity
             android:name=".UserActivity"
+            android:exported="false"
+            android:theme="@style/Theme.ThatiAirAlert" />
+        
+        <!-- Working User Activity -->
+        <activity
+            android:name=".WorkingUserActivity"
+            android:exported="false"
+            android:theme="@style/Theme.ThatiAirAlert" />
+        
+        <!-- Simple User Activity -->
+        <activity
+            android:name=".SimpleUserActivity"
+            android:exported="false"
+            android:theme="@style/Theme.ThatiAirAlert" />
+        
+        <!-- Regional Admin Activity -->
+        <activity
+            android:name=".RegionalAdminActivity"
             android:exported="false"
             android:theme="@style/Theme.ThatiAirAlert" />
         
@@ -100,11 +116,7 @@
             android:exported="false"
             android:theme="@style/Theme.ThatiAirAlert" />
         
-        <!-- Regional Admin Activity -->
-        <activity
-            android:name=".RegionalAdminActivity"
-            android:exported="false"
-            android:theme="@style/Theme.ThatiAirAlert" />
+
         
         <!-- Alert Service -->
         <service

@@ -58,6 +58,13 @@ build/
 gradle-app.setting
 !gradle-wrapper.jar
 !gradle-wrapper.properties
+gradle-*.zip
+gradle-*/
+temp-gradle/
+
+# ===== ANDROID SDK =====
+android-sdk/
+*.zip
 
 # ===== ANDROID STUDIO =====
 .idea/

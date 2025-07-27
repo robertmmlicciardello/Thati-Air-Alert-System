@@ -39,10 +39,16 @@ class LoginActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
+        // Check for existing login session
+        checkExistingLogin()
+        
         setContent {
             ThatiAirAlertTheme {
                 LoginScreen(
-                    onLoginSuccess = { userType, region ->
+                    onLoginSuccess = { userType, region, username ->
+                        // Save login session
+                        saveLoginSession(userType, region, username)
+                        
                         when (userType) {
                             UserType.MAIN_ADMIN -> {
                                 startActivity(Intent(this@LoginActivity, MainAdminActivity::class.java))
@@ -52,24 +58,74 @@ class LoginActivity : ComponentActivity() {
                                 intent.putExtra("region", region)
                                 startActivity(intent)
                             }
+                            UserType.ONLINE_ADMIN -> {
+                                // Online admin uses MainAdminActivity with special flag
+                                val intent = Intent(this@LoginActivity, MainAdminActivity::class.java)
+                                intent.putExtra("admin_type", "online")
+                                startActivity(intent)
+                            }
                             UserType.USER -> {
-                                startActivity(Intent(this@LoginActivity, UserActivity::class.java))
+                                startActivity(Intent(this@LoginActivity, SimpleUserActivity::class.java))
                             }
                         }
                         finish()
                     },
                     onGuestAccess = {
-                        startActivity(Intent(this@LoginActivity, UserActivity::class.java))
+                        startActivity(Intent(this@LoginActivity, SimpleUserActivity::class.java))
                         finish()
                     }
                 )
             }
         }
     }
+    
+    private fun checkExistingLogin() {
+        val sharedPref = getSharedPreferences("thati_login", MODE_PRIVATE)
+        val savedUserType = sharedPref.getString("user_type", null)
+        val savedRegion = sharedPref.getString("region", "")
+        val loginTime = sharedPref.getLong("login_time", 0)
+        
+        // Check if login is still valid (24 hours)
+        val currentTime = System.currentTimeMillis()
+        val twentyFourHours = 24 * 60 * 60 * 1000
+        
+        if (savedUserType != null && (currentTime - loginTime) < twentyFourHours) {
+            // Auto-login based on saved session
+            when (savedUserType) {
+                "MAIN_ADMIN" -> {
+                    startActivity(Intent(this, MainAdminActivity::class.java))
+                    finish()
+                }
+                "REGIONAL_ADMIN" -> {
+                    val intent = Intent(this, RegionalAdminActivity::class.java)
+                    intent.putExtra("region", savedRegion)
+                    startActivity(intent)
+                    finish()
+                }
+                "ONLINE_ADMIN" -> {
+                    val intent = Intent(this, MainAdminActivity::class.java)
+                    intent.putExtra("admin_type", "online")
+                    startActivity(intent)
+                    finish()
+                }
+            }
+        }
+    }
+    
+    private fun saveLoginSession(userType: UserType, region: String, username: String) {
+        val sharedPref = getSharedPreferences("thati_login", MODE_PRIVATE)
+        with(sharedPref.edit()) {
+            putString("user_type", userType.name)
+            putString("region", region)
+            putString("username", username)
+            putLong("login_time", System.currentTimeMillis())
+            apply()
+        }
+    }
 }
 
 enum class UserType {
-    MAIN_ADMIN, REGIONAL_ADMIN, USER
+    MAIN_ADMIN, REGIONAL_ADMIN, ONLINE_ADMIN, USER
 }
 
 data class AdminAccount(
@@ -81,9 +137,10 @@ data class AdminAccount(
     val lastLogin: Long = 0L
 )
 
-// Simulated admin accounts database
-val adminAccounts = listOf(
+// Enhanced admin accounts database with online admin
+val adminAccounts = mutableListOf(
     AdminAccount("main_admin", "thati2024@secure", UserType.MAIN_ADMIN),
+    AdminAccount("online_admin", "online@2024", UserType.ONLINE_ADMIN, "Myanmar"),
     AdminAccount("yangon_admin", "yangon@2024", UserType.REGIONAL_ADMIN, "ရန်ကုန်တိုင်းဒေသကြီး"),
     AdminAccount("mandalay_admin", "mandalay@2024", UserType.REGIONAL_ADMIN, "မန္တလေးတိုင်းဒေသကြီး"),
     AdminAccount("sagaing_admin", "sagaing@2024", UserType.REGIONAL_ADMIN, "စစ်ကိုင်းတိုင်းဒေသကြီး"),
@@ -92,7 +149,7 @@ val adminAccounts = listOf(
 
 @Composable
 fun LoginScreen(
-    onLoginSuccess: (UserType, String) -> Unit,
+    onLoginSuccess: (UserType, String, String) -> Unit,
     onGuestAccess: () -> Unit
 ) {
     var username by remember { mutableStateOf("") }
@@ -273,7 +330,12 @@ fun LoginScreen(
                                 }
                                 
                                 if (account != null) {
-                                    onLoginSuccess(account.userType, account.region)
+                                    // Update last login time
+                                    val accountIndex = adminAccounts.indexOfFirst { it.username == username }
+                                    if (accountIndex != -1) {
+                                        adminAccounts[accountIndex] = account.copy(lastLogin = System.currentTimeMillis())
+                                    }
+                                    onLoginSuccess(account.userType, account.region, account.username)
                                 } else {
                                     loginAttempts++
                                     if (loginAttempts >= 3) {
@@ -309,6 +371,35 @@ fun LoginScreen(
                     }
                     
                     Spacer(modifier = Modifier.height(16.dp))
+                    
+                    // Demo Accounts Info
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFFF0F9FF)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 16.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(12.dp)
+                        ) {
+                            Text(
+                                text = "Demo Accounts:",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF1E40AF),
+                                modifier = Modifier.padding(bottom = 8.dp)
+                            )
+                            
+                            Text(
+                                text = "Main Admin: main_admin / thati2024@secure\n" +
+                                        "Online Admin: online_admin / online@2024\n" +
+                                        "Yangon Admin: yangon_admin / yangon@2024\n" +
+                                        "Mandalay Admin: mandalay_admin / mandalay@2024",
+                                fontSize = 10.sp,
+                                color = Color(0xFF1E40AF)
+                            )
+                        }
+                    }
                     
                     // Guest Access Button
                     OutlinedButton(
