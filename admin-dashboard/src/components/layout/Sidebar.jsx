@@ -14,7 +14,8 @@ import {
   People as UsersIcon,
   Devices as DevicesIcon,
   Analytics as AnalyticsIcon,
-  Settings as SettingsIcon
+  Settings as SettingsIcon,
+  DeviceHub as NetworkIcon
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 
@@ -23,6 +24,7 @@ const drawerWidth = 240;
 const menuItems = [
   { text: 'Dashboard', icon: <DashboardIcon />, path: '/dashboard' },
   { text: 'Alerts', icon: <AlertIcon />, path: '/alerts' },
+  { text: 'Network', icon: <NetworkIcon />, path: '/network' },
   { text: 'Users', icon: <UsersIcon />, path: '/users' },
   { text: 'Devices', icon: <DevicesIcon />, path: '/devices' },
   { text: 'Analytics', icon: <AnalyticsIcon />, path: '/analytics' },

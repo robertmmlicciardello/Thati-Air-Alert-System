@@ -13,6 +13,7 @@ import Header from './components/layout/Header';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Alerts from './pages/Alerts';
+import Network from './pages/Network';
 import Users from './pages/Users';
 import Devices from './pages/Devices';
 import Analytics from './pages/Analytics';
@@ -110,6 +111,7 @@ function AppContent() {
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/alerts" element={<Alerts />} />
+            <Route path="/network" element={<Network />} />
             <Route path="/users" element={<Users />} />
             <Route path="/devices" element={<Devices />} />
             <Route path="/analytics" element={<Analytics />} />

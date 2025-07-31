@@ -10,6 +10,7 @@ const authRoutes = require('./routes/auth');
 const alertRoutes = require('./routes/alerts');
 const deviceRoutes = require('./routes/devices');
 const adminRoutes = require('./routes/admin');
+const networkRoutes = require('./routes/network');
 const { authenticateToken } = require('./middleware/auth');
 const database = require('./database/sqlite');
 const { setupWebSocket } = require('./services/websocket');
@@ -78,6 +79,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/alerts', authenticateToken, alertRoutes);
 app.use('/api/devices', authenticateToken, deviceRoutes);
 app.use('/api/admin', authenticateToken, adminRoutes);
+app.use('/api/network', authenticateToken, networkRoutes);
 
 // WebSocket setup
 setupWebSocket(io);
