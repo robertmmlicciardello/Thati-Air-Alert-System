@@ -109,4 +109,26 @@ class PreferenceManager(private val context: Context) {
     }
     
     fun isFirstLaunch(): Boolean = sharedPreferences.getBoolean("first_launch", true)
+    
+    // Network Settings
+    fun setNetworkRole(role: String) {
+        sharedPreferences.edit().putString("network_role", role).apply()
+    }
+    
+    fun getNetworkRole(): String = sharedPreferences.getString("network_role", "user") ?: "user"
+    
+    fun isAutoOptimizationEnabled(): Boolean = 
+        sharedPreferences.getBoolean("auto_optimization", true)
+    
+    fun setAutoOptimizationEnabled(enabled: Boolean) {
+        sharedPreferences.edit().putBoolean("auto_optimization", enabled).apply()
+    }
+    
+    // Device Name
+    fun getDeviceName(): String = 
+        sharedPreferences.getString("device_name", "Thati Device") ?: "Thati Device"
+    
+    fun setDeviceName(name: String) {
+        sharedPreferences.edit().putString("device_name", name).apply()
+    }
 }
