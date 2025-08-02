@@ -578,43 +578,340 @@ class OfflineMeshManager(private val context: Context) {
      * Connect to available peers
      */
     private fun connectToAvailablePeers() {
-        // Implementation for connecting to discovered peers
-        // This would include Bluetooth pairing and Wi-Fi Direct connection
+        meshScope.launch {
+            try {
+                // Try to connect via WiFi Direct first (same network)
+                connectViaWifiDirect()
+                
+                // Then try Bluetooth
+                connectViaBluetooth()
+                
+                // Finally try hotspot connection
+                connectViaHotspot()
+                
+            } catch (e: Exception) {
+                Logger.e(TAG, "Error connecting to peers: ${e.message}")
+            }
+        }
+    }
+    
+    /**
+     * Connect via WiFi Direct (same network)
+     */
+    private suspend fun connectViaWifiDirect() {
+        try {
+            // Scan for devices on same network
+            val networkInfo = wifiManager?.connectionInfo
+            if (networkInfo != null && networkInfo.networkId != -1) {
+                // We're connected to WiFi, try to find other devices
+                val subnet = getSubnetFromWifiInfo(networkInfo)
+                scanSubnetForPeers(subnet)
+            }
+        } catch (e: Exception) {
+            Logger.e(TAG, "WiFi Direct connection error: ${e.message}")
+        }
+    }
+    
+    /**
+     * Connect via Bluetooth
+     */
+    private suspend fun connectViaBluetooth() {
+        if (bluetoothAdapter == null || !bluetoothAdapter!!.isEnabled) return
+        
+        try {
+            if (ActivityCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_SCAN) != PackageManager.PERMISSION_GRANTED) {
+                return
+            }
+            
+            // Get paired devices first
+            val pairedDevices = bluetoothAdapter!!.bondedDevices
+            for (device in pairedDevices) {
+                if (device.name?.contains("Thati") == true || device.name?.contains("Alert") == true) {
+                    connectToBluetoothDevice(device)
+                }
+            }
+            
+            // Start discovery for new devices
+            bluetoothAdapter!!.startDiscovery()
+            
+        } catch (e: Exception) {
+            Logger.e(TAG, "Bluetooth connection error: ${e.message}")
+        }
+    }
+    
+    /**
+     * Connect via Hotspot
+     */
+    private suspend fun connectViaHotspot() {
+        try {
+            // Try to connect to known hotspot patterns
+            val hotspotPatterns = listOf(
+                "ThatiAlert",
+                "AirAlert", 
+                "EmergencyNet"
+            )
+            
+            // This would scan for WiFi networks with these names
+            // and attempt connection
+            
+        } catch (e: Exception) {
+            Logger.e(TAG, "Hotspot connection error: ${e.message}")
+        }
+    }
+    
+    /**
+     * Scan subnet for peers
+     */
+    private suspend fun scanSubnetForPeers(subnet: String) {
+        withContext(Dispatchers.IO) {
+            try {
+                for (i in 1..254) {
+                    val host = "$subnet.$i"
+                    
+                    // Try to connect to potential peer
+                    try {
+                        val socket = Socket()
+                        socket.connect(InetSocketAddress(host, WIFI_DIRECT_PORT), 1000)
+                        
+                        // Found a peer!
+                        val peerId = host
+                        val peer = PeerInfo(
+                            id = peerId,
+                            name = "WiFi-$peerId",
+                            type = "wifi_direct",
+                            address = peerId,
+                            lastSeen = System.currentTimeMillis(),
+                            isAdmin = true // Assume admin if running server
+                        )
+                        
+                        connectedPeers[peerId] = peer
+                        onPeerConnected?.invoke(peerId)
+                        
+                        Logger.i(TAG, "Found peer via WiFi: $peerId")
+                        
+                        // Send discovery message
+                        sendDiscoveryMessage(socket)
+                        
+                        socket.close()
+                        
+                    } catch (e: Exception) {
+                        // No peer at this address, continue
+                    }
+                }
+            } catch (e: Exception) {
+                Logger.e(TAG, "Subnet scan error: ${e.message}")
+            }
+        }
+    }
+    
+    /**
+     * Connect to Bluetooth device
+     */
+    private suspend fun connectToBluetoothDevice(device: BluetoothDevice) {
+        try {
+            if (ActivityCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
+                return
+            }
+            
+            val socket = device.createRfcommSocketToServiceRecord(UUID.fromString(BLUETOOTH_UUID))
+            socket.connect()
+            
+            val peerId = device.address
+            val peerName = device.name ?: "Unknown"
+            
+            val peer = PeerInfo(
+                id = peerId,
+                name = peerName,
+                type = "bluetooth",
+                address = peerId,
+                lastSeen = System.currentTimeMillis(),
+                isAdmin = true
+            )
+            
+            connectedPeers[peerId] = peer
+            onPeerConnected?.invoke(peerId)
+            
+            Logger.i(TAG, "Connected to Bluetooth peer: $peerName")
+            
+            // Send discovery message
+            sendDiscoveryMessage(socket.outputStream)
+            
+        } catch (e: Exception) {
+            Logger.e(TAG, "Bluetooth device connection error: ${e.message}")
+        }
+    }
+    
+    /**
+     * Send discovery message
+     */
+    private fun sendDiscoveryMessage(socket: Socket) {
+        try {
+            val discoveryMessage = MeshMessage(
+                type = "discovery",
+                senderId = getDeviceId(),
+                payload = createDiscoveryPayload()
+            )
+            
+            val messageJson = messageToJson(discoveryMessage)
+            socket.getOutputStream().write(messageJson.toByteArray())
+            
+        } catch (e: Exception) {
+            Logger.e(TAG, "Error sending discovery message: ${e.message}")
+        }
+    }
+    
+    /**
+     * Send discovery message via OutputStream
+     */
+    private fun sendDiscoveryMessage(outputStream: OutputStream) {
+        try {
+            val discoveryMessage = MeshMessage(
+                type = "discovery",
+                senderId = getDeviceId(),
+                payload = createDiscoveryPayload()
+            )
+            
+            val messageJson = messageToJson(discoveryMessage)
+            outputStream.write(messageJson.toByteArray())
+            
+        } catch (e: Exception) {
+            Logger.e(TAG, "Error sending discovery message: ${e.message}")
+        }
+    }
+    
+    /**
+     * Get subnet from WiFi info
+     */
+    private fun getSubnetFromWifiInfo(wifiInfo: android.net.wifi.WifiInfo): String {
+        val ipAddress = wifiInfo.ipAddress
+        val ip = String.format(
+            "%d.%d.%d",
+            (ipAddress and 0xff),
+            (ipAddress shr 8 and 0xff),
+            (ipAddress shr 16 and 0xff)
+        )
+        return ip
     }
     
     /**
      * Send message via Bluetooth
      */
     private fun sendBluetoothMessage(peer: PeerInfo, messageBytes: ByteArray) {
-        // Implementation for sending Bluetooth message
+        meshScope.launch {
+            try {
+                if (bluetoothAdapter == null) return@launch
+                
+                if (ActivityCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
+                    return@launch
+                }
+                
+                val device = bluetoothAdapter!!.getRemoteDevice(peer.address)
+                val socket = device.createRfcommSocketToServiceRecord(UUID.fromString(BLUETOOTH_UUID))
+                
+                socket.connect()
+                socket.outputStream.write(messageBytes)
+                socket.close()
+                
+                Logger.d(TAG, "Sent Bluetooth message to ${peer.name}")
+                
+            } catch (e: Exception) {
+                Logger.e(TAG, "Error sending Bluetooth message: ${e.message}")
+            }
+        }
     }
     
     /**
      * Send message via Wi-Fi Direct
      */
     private fun sendWifiDirectMessage(peer: PeerInfo, messageBytes: ByteArray) {
-        // Implementation for sending Wi-Fi Direct message
+        meshScope.launch {
+            try {
+                val socket = Socket(peer.address, WIFI_DIRECT_PORT)
+                socket.getOutputStream().write(messageBytes)
+                socket.close()
+                
+                Logger.d(TAG, "Sent WiFi Direct message to ${peer.name}")
+                
+            } catch (e: Exception) {
+                Logger.e(TAG, "Error sending WiFi Direct message: ${e.message}")
+            }
+        }
     }
     
     /**
      * Send message via Hotspot
      */
     private fun sendHotspotMessage(peer: PeerInfo, messageBytes: ByteArray) {
-        // Implementation for sending Hotspot message
+        meshScope.launch {
+            try {
+                val socket = Socket(peer.address, HOTSPOT_PORT)
+                socket.getOutputStream().write(messageBytes)
+                socket.close()
+                
+                Logger.d(TAG, "Sent Hotspot message to ${peer.name}")
+                
+            } catch (e: Exception) {
+                Logger.e(TAG, "Error sending Hotspot message: ${e.message}")
+            }
+        }
     }
     
     /**
      * Discover Bluetooth devices
      */
     private fun discoverBluetoothDevices() {
-        // Implementation for Bluetooth discovery
+        if (bluetoothAdapter == null || !bluetoothAdapter!!.isEnabled) return
+        
+        try {
+            if (ActivityCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_SCAN) != PackageManager.PERMISSION_GRANTED) {
+                Logger.w(TAG, "Bluetooth scan permission not granted")
+                return
+            }
+            
+            // Cancel any ongoing discovery
+            if (bluetoothAdapter!!.isDiscovering) {
+                bluetoothAdapter!!.cancelDiscovery()
+            }
+            
+            // Start discovery
+            val started = bluetoothAdapter!!.startDiscovery()
+            if (started) {
+                Logger.d(TAG, "Bluetooth discovery started")
+            } else {
+                Logger.w(TAG, "Failed to start Bluetooth discovery")
+            }
+            
+        } catch (e: Exception) {
+            Logger.e(TAG, "Error in Bluetooth discovery: ${e.message}")
+        }
     }
     
     /**
      * Discover Wi-Fi Direct devices
      */
     private fun discoverWifiDirectDevices() {
-        // Implementation for Wi-Fi Direct discovery
+        if (wifiP2pManager == null || wifiP2pChannel == null) return
+        
+        try {
+            if (ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                Logger.w(TAG, "Location permission not granted for WiFi Direct")
+                return
+            }
+            
+            // Start WiFi P2P discovery
+            wifiP2pManager!!.discoverPeers(wifiP2pChannel, object : WifiP2pManager.ActionListener {
+                override fun onSuccess() {
+                    Logger.d(TAG, "WiFi Direct discovery started successfully")
+                }
+                
+                override fun onFailure(reason: Int) {
+                    Logger.w(TAG, "WiFi Direct discovery failed: $reason")
+                }
+            })
+            
+        } catch (e: Exception) {
+            Logger.e(TAG, "Error in WiFi Direct discovery: ${e.message}")
+        }
     }
     
     /**
@@ -638,14 +935,64 @@ class OfflineMeshManager(private val context: Context) {
      * Handle heartbeat message
      */
     private fun handleHeartbeat(message: MeshMessage, sender: PeerInfo) {
-        // Update peer info from heartbeat
+        try {
+            val payload = JSONObject(message.payload)
+            val deviceName = payload.optString("deviceName", sender.name)
+            val isAdmin = payload.optBoolean("isAdmin", false)
+            
+            // Update peer info
+            val updatedPeer = sender.copy(
+                name = deviceName,
+                lastSeen = System.currentTimeMillis(),
+                isAdmin = isAdmin
+            )
+            
+            connectedPeers[sender.id] = updatedPeer
+            
+            Logger.d(TAG, "Heartbeat from ${updatedPeer.name} (admin: $isAdmin)")
+            
+        } catch (e: Exception) {
+            Logger.e(TAG, "Error handling heartbeat: ${e.message}")
+        }
     }
     
     /**
      * Handle discovery message
      */
     private fun handleDiscovery(message: MeshMessage, sender: PeerInfo) {
-        // Respond to discovery
+        try {
+            val payload = JSONObject(message.payload)
+            val deviceName = payload.optString("deviceName", sender.name)
+            val isAdmin = payload.optBoolean("isAdmin", false)
+            
+            // Update peer info
+            val updatedPeer = sender.copy(
+                name = deviceName,
+                lastSeen = System.currentTimeMillis(),
+                isAdmin = isAdmin
+            )
+            
+            connectedPeers[sender.id] = updatedPeer
+            
+            Logger.i(TAG, "Discovery from ${updatedPeer.name} (admin: $isAdmin)")
+            
+            // Send discovery response
+            val responseMessage = MeshMessage(
+                type = "discovery",
+                senderId = getDeviceId(),
+                payload = createDiscoveryPayload()
+            )
+            
+            // Send response back to sender
+            when (sender.type) {
+                "bluetooth" -> sendBluetoothMessage(sender, messageToJson(responseMessage).toByteArray())
+                "wifi_direct" -> sendWifiDirectMessage(sender, messageToJson(responseMessage).toByteArray())
+                "hotspot" -> sendHotspotMessage(sender, messageToJson(responseMessage).toByteArray())
+            }
+            
+        } catch (e: Exception) {
+            Logger.e(TAG, "Error handling discovery: ${e.message}")
+        }
     }
     
     /**
@@ -657,7 +1004,35 @@ class OfflineMeshManager(private val context: Context) {
             put("deviceName", getDeviceName())
             put("timestamp", System.currentTimeMillis())
             put("connectedPeers", connectedPeers.size)
+            put("isAdmin", isAdminMode())
         }.toString()
+    }
+    
+    /**
+     * Create discovery payload
+     */
+    private fun createDiscoveryPayload(): String {
+        return JSONObject().apply {
+            put("deviceId", getDeviceId())
+            put("deviceName", getDeviceName())
+            put("timestamp", System.currentTimeMillis())
+            put("isAdmin", isAdminMode())
+            put("capabilities", JSONObject().apply {
+                put("bluetooth", bluetoothAdapter?.isEnabled == true)
+                put("wifi_direct", wifiP2pManager != null)
+                put("hotspot", wifiManager != null)
+            })
+        }.toString()
+    }
+    
+    /**
+     * Check if running in admin mode
+     */
+    private fun isAdminMode(): Boolean {
+        // Check if any server sockets are running
+        return bluetoothServerSocket != null || 
+               wifiDirectServerSocket != null || 
+               hotspotServerSocket != null
     }
     
     /**
@@ -800,4 +1175,24 @@ class OfflineMeshManager(private val context: Context) {
      * Is mesh network running
      */
     fun isRunning(): Boolean = isRunning
+    
+    /**
+     * Get admin peers (for UI display)
+     */
+    fun getAdminPeers(): List<PeerInfo> {
+        return connectedPeers.values.filter { it.isAdmin }.toList()
+    }
+    
+    /**
+     * Get mesh network status
+     */
+    fun getMeshNetworkStatus(): String {
+        return when {
+            !isRunning -> "Stopped"
+            connectedPeers.isEmpty() -> "Searching"
+            connectedPeers.any { it.value.isAdmin } -> "Connected"
+            else -> "Active"
+        }
+    }
+    
 }
