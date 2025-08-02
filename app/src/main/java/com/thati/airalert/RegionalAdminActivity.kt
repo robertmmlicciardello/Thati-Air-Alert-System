@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -76,10 +77,12 @@ class RegionalAdminActivity : ComponentActivity() {
                     Log.d("RegionalAdminActivity", "Received alert from mesh: ${alertMessage.message}")
                 },
                 onPeerConnected = { peerId ->
-                    Log.d("RegionalAdminActivity", "Peer connected: $peerId")
+                    Log.d("RegionalAdminActivity", "User connected to mesh hub: $peerId")
+                    // Update UI will be handled in the composable through LaunchedEffect
                 },
                 onPeerDisconnected = { peerId ->
-                    Log.d("RegionalAdminActivity", "Peer disconnected: $peerId")
+                    Log.d("RegionalAdminActivity", "User disconnected from mesh hub: $peerId")
+                    // Update UI will be handled in the composable through LaunchedEffect
                 }
             )
             
@@ -87,6 +90,12 @@ class RegionalAdminActivity : ComponentActivity() {
             lifecycleScope.launch {
                 delay(1000)
                 offlineMeshManager.startAdminMode()
+                
+                // Update mesh hub status periodically
+                while (true) {
+                    delay(3000) // Update every 3 seconds
+                    // This will be handled in the composable through LaunchedEffect
+                }
             }
         }
     }
@@ -133,9 +142,30 @@ fun RegionalAdminScreen(
     var isRefreshing by remember { mutableStateOf(false) }
     var showAddUserDialog by remember { mutableStateOf(false) }
     var showSendAlertDialog by remember { mutableStateOf(false) }
+    var meshHubStatus by remember { mutableStateOf("Mesh Hub စတင်နေသည်...") }
+    var connectedUsers by remember { mutableStateOf(0) }
+    var meshHubActive by remember { mutableStateOf(false) }
     
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    
+    // Update mesh hub status periodically
+    LaunchedEffect(Unit) {
+        delay(2000) // Initial delay for mesh network to start
+        meshHubActive = true
+        meshHubStatus = "Mesh Hub အသင့်ဖြစ်ပြီး - Users များ စောင့်နေသည်"
+        
+        while (true) {
+            delay(3000)
+            connectedUsers = meshManager.getConnectedPeersCount()
+            
+            if (connectedUsers > 0) {
+                meshHubStatus = "Mesh Hub လုပ်ဆောင်နေသည် - $connectedUsers users ချိတ်ဆက်ထားသည်"
+            } else {
+                meshHubStatus = "Mesh Hub အသင့်ဖြစ်ပြီး - Users များ စောင့်နေသည်"
+            }
+        }
+    }
     
     Box(
         modifier = Modifier
@@ -155,18 +185,31 @@ fun RegionalAdminScreen(
             // Header
             RegionalAdminHeader(
                 region = region,
+                meshHubStatus = meshHubStatus,
+                connectedUsers = connectedUsers,
+                meshHubActive = meshHubActive,
                 onRefresh = {
                     isRefreshing = true
                     scope.launch {
                         delay(2000)
                         // Refresh users from database or keep current users
                         // Refresh alerts from database or keep current alerts
+                        connectedUsers = meshManager.getConnectedPeersCount()
                         isRefreshing = false
                         Toast.makeText(context, "Data refreshed", Toast.LENGTH_SHORT).show()
                     }
                 },
                 onLogout = onLogout,
                 isRefreshing = isRefreshing
+            )
+            
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            // Mesh Hub Status Card
+            MeshHubStatusCard(
+                meshHubActive = meshHubActive,
+                connectedUsers = connectedUsers,
+                meshHubStatus = meshHubStatus
             )
             
             // Tab Navigation
@@ -285,6 +328,9 @@ fun RegionalAdminScreen(
 @Composable
 fun RegionalAdminHeader(
     region: String,
+    meshHubStatus: String,
+    connectedUsers: Int,
+    meshHubActive: Boolean,
     onRefresh: () -> Unit,
     onLogout: () -> Unit,
     isRefreshing: Boolean
@@ -982,4 +1028,105 @@ fun isRegionalToday(timestamp: Long): Boolean {
     val date = Calendar.getInstance().apply { timeInMillis = timestamp }
     return today.get(Calendar.YEAR) == date.get(Calendar.YEAR) &&
            today.get(Calendar.DAY_OF_YEAR) == date.get(Calendar.DAY_OF_YEAR)
+}
+
+@Composable
+fun MeshHubStatusCard(
+    meshHubActive: Boolean,
+    connectedUsers: Int,
+    meshHubStatus: String
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = if (meshHubActive) 
+                Color(0xFF10B981).copy(alpha = 0.1f) 
+            else 
+                Color(0xFFF59E0B).copy(alpha = 0.1f)
+        ),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Hub Icon
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .background(
+                        if (meshHubActive) Color(0xFF10B981) else Color(0xFFF59E0B),
+                        CircleShape
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "🏢",
+                    fontSize = 24.sp
+                )
+            }
+            
+            Spacer(modifier = Modifier.width(16.dp))
+            
+            // Status Info
+            Column(
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(
+                    text = "Mesh Network Hub",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF1F2937)
+                )
+                Text(
+                    text = meshHubStatus,
+                    fontSize = 14.sp,
+                    color = Color(0xFF6B7280),
+                    modifier = Modifier.padding(top = 2.dp)
+                )
+                
+                if (meshHubActive && connectedUsers > 0) {
+                    Row(
+                        modifier = Modifier.padding(top = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "👥",
+                            fontSize = 14.sp,
+                            modifier = Modifier.padding(end = 4.dp)
+                        )
+                        Text(
+                            text = "$connectedUsers users ချိတ်ဆက်ထားသည်",
+                            fontSize = 12.sp,
+                            color = Color(0xFF10B981),
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+            }
+            
+            // Status Indicator
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(12.dp)
+                        .background(
+                            if (meshHubActive) Color(0xFF10B981) else Color(0xFFF59E0B),
+                            CircleShape
+                        )
+                )
+                Text(
+                    text = if (meshHubActive) "Active" else "Starting",
+                    fontSize = 10.sp,
+                    color = if (meshHubActive) Color(0xFF10B981) else Color(0xFFF59E0B),
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
+        }
+    }
 }

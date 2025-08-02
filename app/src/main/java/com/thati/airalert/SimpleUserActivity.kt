@@ -59,6 +59,9 @@ class SimpleUserActivity : ComponentActivity() {
     private var receivedAlerts by mutableStateOf<List<SimpleAlert>>(emptyList())
     private var connectedDevices by mutableStateOf(0)
     private var isOnline by mutableStateOf(false)
+    private var meshNetworkStatus by mutableStateOf("ရှာနေသည်...")
+    private var discoveredAdminNodes by mutableStateOf<List<String>>(emptyList())
+    private var meshNetworkActive by mutableStateOf(false)
     
     private val alertReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -110,6 +113,9 @@ class SimpleUserActivity : ComponentActivity() {
                     receivedAlerts = receivedAlerts,
                     connectedDevices = connectedDevices,
                     isOnline = isOnline,
+                    meshNetworkStatus = meshNetworkStatus,
+                    discoveredAdminNodes = discoveredAdminNodes,
+                    meshNetworkActive = meshNetworkActive,
                     onToggleSystem = { toggleAlertSystem() },
                     onTestAlert = { testAlert() },
                     onClearAlerts = { clearAllAlerts() },
@@ -148,10 +154,40 @@ class SimpleUserActivity : ComponentActivity() {
                 onPeerConnected = { peerId ->
                     Log.d("SimpleUserActivity", "Peer connected: $peerId")
                     connectedDevices = offlineMeshManager.getConnectedPeersCount()
+                    
+                    // Update discovered admin nodes
+                    val peers = offlineMeshManager.getConnectedPeers()
+                    discoveredAdminNodes = peers.filter { it.isAdmin }.map { it.name }
+                    
+                    // Update mesh network status
+                    meshNetworkActive = true
+                    meshNetworkStatus = if (discoveredAdminNodes.isNotEmpty()) {
+                        "Admin Hub ရှာတွေ့: ${discoveredAdminNodes.size} ခု"
+                    } else {
+                        "Mesh Network ချိတ်ဆက်ပြီး"
+                    }
+                    
+                    runOnUiThread {
+                        Toast.makeText(this@SimpleUserActivity, "🌐 Mesh: $peerId ချိတ်ဆက်ပြီး", Toast.LENGTH_SHORT).show()
+                    }
                 },
                 onPeerDisconnected = { peerId ->
                     Log.d("SimpleUserActivity", "Peer disconnected: $peerId")
                     connectedDevices = offlineMeshManager.getConnectedPeersCount()
+                    
+                    // Update discovered admin nodes
+                    val peers = offlineMeshManager.getConnectedPeers()
+                    discoveredAdminNodes = peers.filter { it.isAdmin }.map { it.name }
+                    
+                    // Update mesh network status
+                    if (connectedDevices == 0) {
+                        meshNetworkActive = false
+                        meshNetworkStatus = "Admin Hub ရှာနေသည်..."
+                    }
+                    
+                    runOnUiThread {
+                        Toast.makeText(this@SimpleUserActivity, "🌐 Mesh: $peerId ချိတ်ဆက်မှု ပြတ်တောက်", Toast.LENGTH_SHORT).show()
+                    }
                 }
             )
         }
@@ -221,16 +257,38 @@ class SimpleUserActivity : ComponentActivity() {
     private fun startOfflineMeshNetwork() {
         lifecycleScope.launch {
             try {
+                meshNetworkStatus = "Mesh Network စတင်နေသည်..."
+                
                 // Start mesh network in user mode
                 offlineMeshManager.startUserMode()
                 
-                // Update connected devices count
+                meshNetworkStatus = "Admin Hub များ ရှာနေသည်..."
+                
+                // Update connected devices count and status
                 while (isSystemActive) {
                     delay(5000)
                     connectedDevices = offlineMeshManager.getConnectedPeersCount()
+                    
+                    // Update admin nodes list
+                    val peers = offlineMeshManager.getConnectedPeers()
+                    discoveredAdminNodes = peers.filter { it.isAdmin }.map { it.name }
+                    
+                    // Update status based on connections
+                    if (connectedDevices > 0) {
+                        meshNetworkActive = true
+                        meshNetworkStatus = if (discoveredAdminNodes.isNotEmpty()) {
+                            "Admin Hub ချိတ်ဆက်ပြီး: ${discoveredAdminNodes.size} ခု"
+                        } else {
+                            "Mesh Network အသင့်: ${connectedDevices} devices"
+                        }
+                    } else {
+                        meshNetworkActive = false
+                        meshNetworkStatus = "Admin Hub ရှာနေသည်..."
+                    }
                 }
             } catch (e: Exception) {
                 Log.e("SimpleUserActivity", "Error starting mesh network: ${e.message}")
+                meshNetworkStatus = "Mesh Network Error: ${e.message}"
             }
         }
     }
@@ -298,6 +356,9 @@ fun SimpleUserScreen(
     receivedAlerts: List<SimpleAlert>,
     connectedDevices: Int,
     isOnline: Boolean,
+    meshNetworkStatus: String,
+    discoveredAdminNodes: List<String>,
+    meshNetworkActive: Boolean,
     onToggleSystem: () -> Unit,
     onTestAlert: () -> Unit,
     onClearAlerts: () -> Unit,
@@ -326,8 +387,20 @@ fun SimpleUserScreen(
                 isSystemActive = isSystemActive,
                 isOnline = isOnline,
                 connectedDevices = connectedDevices,
+                meshNetworkStatus = meshNetworkStatus,
+                meshNetworkActive = meshNetworkActive,
                 onBackToMain = onBackToMain
             )
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            // Mesh Network Status Card
+            if (discoveredAdminNodes.isNotEmpty()) {
+                MeshNetworkStatusCard(
+                    discoveredAdminNodes = discoveredAdminNodes,
+                    meshNetworkActive = meshNetworkActive
+                )
+            }
             
             Spacer(modifier = Modifier.height(24.dp))
             
@@ -362,6 +435,8 @@ fun SimpleHeader(
     isSystemActive: Boolean,
     isOnline: Boolean,
     connectedDevices: Int,
+    meshNetworkStatus: String,
+    meshNetworkActive: Boolean,
     onBackToMain: () -> Unit
 ) {
     Card(
@@ -422,10 +497,10 @@ fun SimpleHeader(
                 )
                 
                 StatusIndicator(
-                    icon = "👥",
-                    label = "အနီးအနား",
-                    value = "$connectedDevices ခု",
-                    color = Color(0xFF3B82F6)
+                    icon = if (meshNetworkActive) "🌐" else "🔍",
+                    label = "Mesh Network",
+                    value = if (meshNetworkActive) "ချိတ်ဆက်ပြီး" else "ရှာနေသည်",
+                    color = if (meshNetworkActive) Color(0xFF10B981) else Color(0xFFF59E0B)
                 )
             }
         }
@@ -727,6 +802,114 @@ fun SimpleAlertCard(alert: SimpleAlert) {
                             shape = CircleShape
                         )
                 )
+            }
+        }
+    }
+}
+
+@Composable
+fun MeshNetworkStatusCard(
+    discoveredAdminNodes: List<String>,
+    meshNetworkActive: Boolean
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = if (meshNetworkActive) 
+                Color(0xFF10B981).copy(alpha = 0.1f) 
+            else 
+                Color(0xFFF59E0B).copy(alpha = 0.1f)
+        ),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "🌐",
+                    fontSize = 24.sp,
+                    modifier = Modifier.padding(end = 12.dp)
+                )
+                
+                Column(
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        text = "Mesh Network Status",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF1F2937)
+                    )
+                    Text(
+                        text = if (meshNetworkActive) "Admin Hub များ ရှာတွေ့ပြီး" else "Admin Hub များ ရှာနေသည်",
+                        fontSize = 12.sp,
+                        color = Color(0xFF6B7280)
+                    )
+                }
+                
+                SuggestionChip(
+                    onClick = { },
+                    label = {
+                        Text(
+                            text = if (meshNetworkActive) "Active" else "Searching",
+                            color = Color.White,
+                            fontSize = 12.sp
+                        )
+                    },
+                    colors = SuggestionChipDefaults.suggestionChipColors(
+                        containerColor = if (meshNetworkActive) Color(0xFF10B981) else Color(0xFFF59E0B)
+                    )
+                )
+            }
+            
+            if (discoveredAdminNodes.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(12.dp))
+                
+                Text(
+                    text = "ရှာတွေ့သော Admin Hub များ:",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Color(0xFF374151),
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+                
+                LazyColumn(
+                    modifier = Modifier.heightIn(max = 120.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    items(discoveredAdminNodes) { adminNode ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(
+                                    Color(0xFF10B981).copy(alpha = 0.1f),
+                                    RoundedCornerShape(8.dp)
+                                )
+                                .padding(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "🏢",
+                                fontSize = 16.sp,
+                                modifier = Modifier.padding(end = 8.dp)
+                            )
+                            Text(
+                                text = adminNode,
+                                fontSize = 14.sp,
+                                color = Color(0xFF1F2937),
+                                modifier = Modifier.weight(1f)
+                            )
+                            Text(
+                                text = "✅",
+                                fontSize = 14.sp
+                            )
+                        }
+                    }
+                }
             }
         }
     }
