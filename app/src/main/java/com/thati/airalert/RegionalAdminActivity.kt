@@ -26,26 +26,37 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.thati.airalert.ui.theme.ThatiAirAlertTheme
+import com.thati.airalert.mesh.OfflineMeshManager
+import com.thati.airalert.models.AlertMessage
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
 import com.thati.airalert.utils.AlertBroadcastManager
+import androidx.lifecycle.lifecycleScope
+import android.util.Log
 
 /**
  * Regional Admin Activity - ဒေသဆိုင်ရာ Admin Panel
  */
 class RegionalAdminActivity : ComponentActivity() {
     
+    private lateinit var offlineMeshManager: OfflineMeshManager
+    
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
         val region = intent.getStringExtra("region") ?: "Unknown Region"
         
+        // Initialize offline mesh manager
+        offlineMeshManager = OfflineMeshManager(this)
+        setupMeshNetworking()
+        
         setContent {
             ThatiAirAlertTheme {
                 RegionalAdminScreen(
                     region = region,
+                    meshManager = offlineMeshManager,
                     onLogout = { 
                         clearLoginSession()
                         startActivity(Intent(this, SimpleMainActivity::class.java))
@@ -56,9 +67,38 @@ class RegionalAdminActivity : ComponentActivity() {
         }
     }
     
+    private fun setupMeshNetworking() {
+        // Initialize mesh manager
+        if (offlineMeshManager.initialize()) {
+            // Set callbacks for mesh networking
+            offlineMeshManager.setCallbacks(
+                onMessageReceived = { alertMessage ->
+                    Log.d("RegionalAdminActivity", "Received alert from mesh: ${alertMessage.message}")
+                },
+                onPeerConnected = { peerId ->
+                    Log.d("RegionalAdminActivity", "Peer connected: $peerId")
+                },
+                onPeerDisconnected = { peerId ->
+                    Log.d("RegionalAdminActivity", "Peer disconnected: $peerId")
+                }
+            )
+            
+            // Start mesh network in admin mode
+            lifecycleScope.launch {
+                delay(1000)
+                offlineMeshManager.startAdminMode()
+            }
+        }
+    }
+    
     private fun clearLoginSession() {
         val sharedPref = getSharedPreferences("thati_login", MODE_PRIVATE)
         sharedPref.edit().clear().apply()
+    }
+    
+    override fun onDestroy() {
+        super.onDestroy()
+        offlineMeshManager.stop()
     }
 }
 
@@ -84,6 +124,7 @@ data class RegionalAlert(
 @Composable
 fun RegionalAdminScreen(
     region: String,
+    meshManager: OfflineMeshManager,
     onLogout: () -> Unit
 ) {
     var selectedTab by remember { mutableStateOf(0) }
@@ -162,7 +203,21 @@ fun RegionalAdminScreen(
                     region = region,
                     userCount = users.count { it.isActive },
                     onSendAlert = { message, type, priority ->
-                        // Send alert through broadcast manager
+                        // Send alert through offline mesh network
+                        val alertMessage = AlertMessage(
+                            id = "alert_${System.currentTimeMillis()}",
+                            message = message,
+                            type = type,
+                            priority = priority,
+                            timestamp = System.currentTimeMillis(),
+                            sender = "Regional Admin - $region",
+                            location = region
+                        )
+                        
+                        // Send through mesh network for true offline communication
+                        meshManager.sendAlert(alertMessage)
+                        
+                        // Also send through local broadcast for same-device communication
                         AlertBroadcastManager.sendAlert(
                             context = context,
                             message = message,
@@ -500,14 +555,7 @@ fun SendAlertTab(
                             isSending = true
                             scope.launch {
                                 delay(1500)
-                                // Send quick alert
-                                AlertBroadcastManager.sendAlert(
-                                    context = context,
-                                    message = message,
-                                    type = "အမြန်",
-                                    priority = "မြင့်",
-                                    region = region
-                                )
+                                // Send quick alert through mesh network
                                 onSendAlert(message, "အမြန်", "မြင့်")
                                 isSending = false
                             }

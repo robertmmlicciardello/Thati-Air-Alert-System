@@ -41,6 +41,7 @@ import com.thati.airalert.models.AlertMessage
 import com.thati.airalert.services.AlertService
 import com.thati.airalert.utils.AlertBroadcastManager
 import com.thati.airalert.utils.AlertSoundPlayer
+import com.thati.airalert.mesh.OfflineMeshManager
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -53,6 +54,7 @@ import java.util.*
 class SimpleUserActivity : ComponentActivity() {
     
     private lateinit var alertSoundPlayer: AlertSoundPlayer
+    private lateinit var offlineMeshManager: OfflineMeshManager
     private var isSystemActive by mutableStateOf(false)
     private var receivedAlerts by mutableStateOf<List<SimpleAlert>>(emptyList())
     private var connectedDevices by mutableStateOf(0)
@@ -88,6 +90,10 @@ class SimpleUserActivity : ComponentActivity() {
         // Initialize alert sound player
         alertSoundPlayer = AlertSoundPlayer(this)
         
+        // Initialize offline mesh manager
+        offlineMeshManager = OfflineMeshManager(this)
+        setupMeshNetworking()
+        
         // Register broadcast receiver
         LocalBroadcastManager.getInstance(this).registerReceiver(
             alertReceiver,
@@ -116,6 +122,41 @@ class SimpleUserActivity : ComponentActivity() {
         }
     }
     
+    private fun setupMeshNetworking() {
+        // Initialize mesh manager
+        if (offlineMeshManager.initialize()) {
+            // Set callbacks for mesh networking
+            offlineMeshManager.setCallbacks(
+                onMessageReceived = { alertMessage ->
+                    // Handle received alert from mesh network
+                    val newAlert = SimpleAlert(
+                        id = alertMessage.id,
+                        message = alertMessage.message,
+                        timestamp = alertMessage.timestamp,
+                        isImportant = alertMessage.priority in listOf("high", "critical", "အရေးကြီး", "မြင့်")
+                    )
+                    receivedAlerts = listOf(newAlert) + receivedAlerts
+                    
+                    // Play alert sound
+                    alertSoundPlayer.playEmergencyAlert(priority = alertMessage.priority)
+                    
+                    // Show toast notification
+                    runOnUiThread {
+                        Toast.makeText(this@SimpleUserActivity, "🚨 Mesh: ${alertMessage.message}", Toast.LENGTH_LONG).show()
+                    }
+                },
+                onPeerConnected = { peerId ->
+                    Log.d("SimpleUserActivity", "Peer connected: $peerId")
+                    connectedDevices = offlineMeshManager.getConnectedPeersCount()
+                },
+                onPeerDisconnected = { peerId ->
+                    Log.d("SimpleUserActivity", "Peer disconnected: $peerId")
+                    connectedDevices = offlineMeshManager.getConnectedPeersCount()
+                }
+            )
+        }
+    }
+
     private fun autoStartAlertSystem() {
         lifecycleScope.launch {
             delay(1000) // Brief delay for UI to load
@@ -126,8 +167,8 @@ class SimpleUserActivity : ComponentActivity() {
             // Start alert service automatically
             startAlertService()
             
-            // Simulate mesh network
-            simulateMeshNetwork()
+            // Start offline mesh networking
+            startOfflineMeshNetwork()
         }
     }
     
@@ -177,15 +218,19 @@ class SimpleUserActivity : ComponentActivity() {
         }
     }
     
-    private fun simulateMeshNetwork() {
+    private fun startOfflineMeshNetwork() {
         lifecycleScope.launch {
-            while (true) {
-                delay(5000)
-                if (isSystemActive) {
-                    connectedDevices = (2..8).random()
-                } else {
-                    connectedDevices = 0
+            try {
+                // Start mesh network in user mode
+                offlineMeshManager.startUserMode()
+                
+                // Update connected devices count
+                while (isSystemActive) {
+                    delay(5000)
+                    connectedDevices = offlineMeshManager.getConnectedPeersCount()
                 }
+            } catch (e: Exception) {
+                Log.e("SimpleUserActivity", "Error starting mesh network: ${e.message}")
             }
         }
     }
@@ -236,6 +281,7 @@ class SimpleUserActivity : ComponentActivity() {
         super.onDestroy()
         LocalBroadcastManager.getInstance(this).unregisterReceiver(alertReceiver)
         alertSoundPlayer.release()
+        offlineMeshManager.stop()
     }
 }
 
