@@ -260,14 +260,8 @@ fun RegionalAdminScreen(
                         // Send through mesh network for true offline communication
                         meshManager.sendAlert(alertMessage)
                         
-                        // Also send through local broadcast for same-device communication
-                        AlertBroadcastManager.sendAlert(
-                            context = context,
-                            message = message,
-                            type = type,
-                            priority = priority,
-                            region = region
-                        )
+                        // Show local notification for admin feedback
+                        Toast.makeText(context, "🚨 Alert ပို့ပြီး: $message", Toast.LENGTH_SHORT).show()
                         
                         val newAlert = RegionalAlert(
                             id = "alert_${System.currentTimeMillis()}",

@@ -2,10 +2,8 @@
 
 package com.thati.airalert
 
-import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -33,7 +31,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.lifecycleScope
-import androidx.localbroadcastmanager.content.LocalBroadcastManager
+
 import com.thati.airalert.ui.theme.ThatiAirAlertTheme
 import android.os.Build
 import android.util.Log
@@ -63,29 +61,7 @@ class SimpleUserActivity : ComponentActivity() {
     private var discoveredAdminNodes by mutableStateOf<List<String>>(emptyList())
     private var meshNetworkActive by mutableStateOf(false)
     
-    private val alertReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context?, intent: Intent?) {
-            if (intent?.action == AlertBroadcastManager.ACTION_NEW_ALERT) {
-                val message = intent.getStringExtra("message") ?: "သတိပေးချက် ရရှိပါသည်"
-                val priority = intent.getStringExtra("priority") ?: "medium"
-                
-                // Play alert sound
-                alertSoundPlayer.playEmergencyAlert(priority = priority)
-                
-                // Add to alerts list
-                val newAlert = SimpleAlert(
-                    id = System.currentTimeMillis().toString(),
-                    message = message,
-                    timestamp = System.currentTimeMillis(),
-                    isImportant = priority in listOf("high", "critical", "အရေးကြီး", "မြင့်")
-                )
-                receivedAlerts = listOf(newAlert) + receivedAlerts
-                
-                // Show toast notification
-                Toast.makeText(this@SimpleUserActivity, "🚨 $message", Toast.LENGTH_LONG).show()
-            }
-        }
-    }
+    // Note: Alert receiving is now handled through mesh network callbacks
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -97,11 +73,7 @@ class SimpleUserActivity : ComponentActivity() {
         offlineMeshManager = OfflineMeshManager(this)
         setupMeshNetworking()
         
-        // Register broadcast receiver
-        LocalBroadcastManager.getInstance(this).registerReceiver(
-            alertReceiver,
-            IntentFilter(AlertBroadcastManager.ACTION_NEW_ALERT)
-        )
+        // Note: Using mesh network for alerts instead of local broadcast
         
         // Auto-start the alert system
         autoStartAlertSystem()
@@ -337,7 +309,6 @@ class SimpleUserActivity : ComponentActivity() {
     
     override fun onDestroy() {
         super.onDestroy()
-        LocalBroadcastManager.getInstance(this).unregisterReceiver(alertReceiver)
         alertSoundPlayer.release()
         offlineMeshManager.stop()
     }

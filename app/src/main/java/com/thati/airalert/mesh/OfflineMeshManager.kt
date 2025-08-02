@@ -497,15 +497,23 @@ class OfflineMeshManager(private val context: Context) {
             when (message.type) {
                 "alert" -> {
                     val alertMessage = jsonToAlert(message.payload)
-                    onMessageReceived?.invoke(alertMessage)
                     
-                    // Forward message if TTL > 0
-                    if (message.ttl > 0) {
+                    // Only show alert if it's not from this device
+                    if (message.senderId != getDeviceId()) {
+                        onMessageReceived?.invoke(alertMessage)
+                        Logger.i(TAG, "Alert received from ${sender.name}: ${alertMessage.message}")
+                    } else {
+                        Logger.d(TAG, "Ignoring own alert message")
+                    }
+                    
+                    // Forward message if TTL > 0 and not from this device
+                    if (message.ttl > 0 && message.senderId != getDeviceId()) {
                         val forwardedMessage = message.copy(
                             ttl = message.ttl - 1,
-                            senderId = getDeviceId()
+                            senderId = message.senderId // Keep original sender ID
                         )
                         broadcastMessage(forwardedMessage)
+                        Logger.d(TAG, "Forwarding alert from ${message.senderId}")
                     }
                 }
                 "heartbeat" -> {
